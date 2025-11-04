@@ -1,581 +1,353 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  Image,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  TextInput,
-  Modal,
-  Alert,
+import { 
+    View, 
+    Text, 
+    ScrollView, 
+    TouchableOpacity, 
+    StyleSheet, 
+    Image, 
+    Alert,
+    SafeAreaView
 } from 'react-native';
+import Icon from 'react-native-vector-icons/Feather';
 
-// Removidas todas as importações de bibliotecas de ícones
+// Mocks e Tema
+import Theme from '../theme/index.js'; 
+const { colors, spacing, typography, borderRadius, shadows } = Theme; 
 
-// Mocks para funções de storage e tipos
-import Theme from '../theme/index.js';
-
-// --- Mocks (mantidos) ---
-const mockBook = {
-    id: '1',
-    title: 'O Nome do Vento', 
-    author: 'Patrick Rothfuss',
-    cover: 'https://picsum.photos/400/600', 
-    genre: 'Fantasia',
-    year: 2007,
-    status: 'read', 
-    synopsis: 'Uma história épica sobre Kvothe, um lendário mago, músico e assassino.',
-    totalPages: 699,
-    pagesRead: 699,
-    progress: 100,
-    rating: 4,
-    review: 'Uma história envolvente e maravilhosamente escrita. Um dos melhores inícios de saga.',
-};
-
-const mockReviews = [
-    { id: 'r1', userName: 'João Santos', rating: 4, comment: 'Excelente leitura! Recomendo muito.', date: new Date().toISOString() },
-    { id: 'r2', userName: 'Ana Costa', rating: 5, comment: 'Um dos melhores livros que já li. Não consegui parar de ler!', date: new Date().toISOString() },
+// --- Mocks de Dados ---
+const mockBooks = [
+    { 
+        id:'1', 
+        title:'O Nome do Vento', 
+        author:'Patrick Rothfuss', 
+        cover:'https://picsum.photos/400/600?random=101', 
+        genre: 'Fantasia',
+        year: 2007,
+        status:'read', 
+        rating: 4.5,
+        totalPages: 699,
+        synopsis: 'Uma história épica sobre Kvothe, um lendário mago, músico e assassino. Detalhes da Edição. A busca de Kvothe por respostas sobre os Chandrian o leva a muitos lugares perigosos e inesperados.',
+    },
+    { 
+        id:'2', 
+        title:'A Paciente Silenciosa', 
+        author:'Alex Michaelides', 
+        cover:'https://picsum.photos/400/600?random=102', 
+        genre: 'Thriller',
+        year: 2019,
+        status:'reading', 
+        progress: 65,
+        totalPages: 350,
+        synopsis: 'Um thriller psicológico sobre uma famosa pintora que mata o marido e se recusa a falar uma única palavra desde então.',
+    },
 ];
 
-const getBookByIdMock = (id) => {
-    if (id === '1') return { ...mockBook };
-    return null;
-};
-// --- Fim dos Mocks ---
-
-// Desestrutura o tema
-const { colors, spacing, typography } = {
-  ...Theme,
-  colors: {
-      ...Theme.colors,
-      statusWantBg: '#E0E7FF', 
-      statusReadingBg: '#FEF9C3', 
-      statusReadBg: '#D1FAE5', 
-      statusReadBorder: '#34D399', 
-      statusWantText: '#1D4ED8',
-      statusReadingText: '#B45309',
-      statusReadText: '#047857',
-      cardForeground: Theme.colors.foreground || '#1C1C1E',
-      mutedForeground: Theme.colors.mutedForeground || '#717182',
-  },
-  spacing: Theme.spacing || { 0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40, 12: 48 },
-  typography: Theme.typography || { body: { fontSize: 16 }, small: { fontSize: 14 }, button: { fontSize: 16 } }
+const getBookById = (id) => {
+    return mockBooks.find(book => book.id === id);
 };
 
-
-// Componente simples para os Status Tags (Gênero/Ano/Lido)
-const InfoTag = ({ text, isPrimary = false, emoji }) => (
-    <View style={[stylesLocal.tagContainer, isPrimary ? stylesLocal.tagPrimary : stylesLocal.tagMuted]}>
-        {emoji && <Text style={[stylesLocal.tagEmoji, isPrimary && { color: colors.primaryForeground }]}>{emoji}</Text>}
-        <Text style={[stylesLocal.tagText, isPrimary ? stylesLocal.tagPrimaryText : stylesLocal.tagMutedText]}>{text}</Text>
-    </View>
-);
-
-// Componente simples de StarRating (MOCK para visualização)
-const StarRating = ({ rating, size = 'sm' }) => {
-    const maxStars = 5;
-    const starSize = size === 'sm' ? 16 : 24;
-    return (
-        <View style={{ flexDirection: 'row' }}>
-            {Array.from({ length: maxStars }, (_, index) => (
-                // Usando o caractere Unicode da estrela
-                <Text key={index} style={{ fontSize: starSize, color: index < rating ? colors.accent : colors.mutedForeground, paddingHorizontal: 1 }}>★</Text>
-            ))}
-        </View>
-    );
+// Mapeamento de status para exibição
+const statusMap = {
+    'want-to-read': { label: 'Quero Ler', color: '#FCD34D' }, // Amarelo/Ouro
+    'reading': { label: 'Lendo', color: colors.primary },     // Verde (Primary)
+    'read': { label: 'Lido', color: '#6366F1' },              // Roxo/Índigo
 };
 
 // --- Componente Principal ---
+export default function BookDetailScreen({ navigation, route }) {
+    // 📌 Obtém o ID do livro passado pela BooksListScreen
+    const { bookId } = route.params || {}; 
+    const [book, setBook] = useState(null);
 
-export default function BookDetailScreen({ bookId = '1', onBack = () => {}, onEdit = () => {} }) {
-  
-  const [book, setBook] = useState(getBookByIdMock(bookId));
-  const [reviews, setReviews] = useState(mockReviews);
-  const [showReviewModal, setShowReviewModal] = useState(false);
-  const [rating, setRating] = useState(book?.rating || 0);
+    useEffect(() => {
+        if (bookId) {
+            // Carrega os dados mockados com base no ID
+            const fetchedBook = getBookById(bookId);
+            setBook(fetchedBook);
+        }
+    }, [bookId]);
 
-  if (!book) {
-    return (
-      <View style={[stylesLocal.fullScreenContainer, stylesLocal.centerContent]}>
-        <Text style={{ color: colors.mutedForeground, marginBottom: spacing[4] }}>Livro não encontrado</Text>
-        <TouchableOpacity onPress={onBack} style={stylesLocal.actionButton}>
-             <Text style={stylesLocal.actionText}>Voltar</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+    // Lógica de exclusão do livro
+    const handleDelete = () => {
+        Alert.alert(
+            "Confirmar Exclusão",
+            `Tem certeza que deseja excluir "${book.title}" da sua biblioteca?`,
+            [
+                { text: "Cancelar", style: "cancel" },
+                { 
+                    text: "Excluir", 
+                    onPress: () => {
+                        // 💡 Aqui você chamaria a função de exclusão
+                        Alert.alert("Sucesso", `Livro "${book.title}" excluído.`);
+                        navigation.goBack(); // Volta para a lista
+                    },
+                    style: 'destructive'
+                }
+            ]
+        );
+    };
 
-  const statusLabels = {
-    'want-to-read': 'Quero Ler',
-    'reading': 'Lendo',
-    'read': 'Lido',
-  };
-  
-  const statusStyles = {
-    'want-to-read': { bg: colors.statusWantBg, text: colors.statusWantText, border: '#60A5FA' },
-    'reading': { bg: colors.statusReadingBg, text: colors.statusReadingText, border: '#FCD34D' },
-    'read': { bg: colors.statusReadBg, text: colors.statusReadText, border: colors.statusReadBorder },
-  };
-  
-  const handleStatusChange = (newStatus) => {
-    setBook(prev => ({...prev, status: newStatus}));
-  };
-  
-  const handleReviewClick = () => {
-    setRating(book.rating || 0);
-    setShowReviewModal(true);
-  };
-  
-  const handleReviewSubmit = () => {
-      Alert.alert('Avaliação Salva', `Você avaliou ${book.title} com ${rating} estrelas.`);
-      setBook(prev => ({...prev, rating: rating}));
-      setShowReviewModal(false);
-  };
+    // Navega para a tela de edição
+    const handleEdit = () => {
+        // Navega para o BookForm, passando o ID para acionar o modo Edição
+        navigation.navigate('BookForm', { bookId: book.id });
+    };
 
-  const handleDelete = () => {
-    Alert.alert(
-      "Excluir Livro",
-      `Tem certeza que deseja excluir "${book.title}"?`,
-      [{ text: "Cancelar", style: "cancel" }, { text: "Excluir", onPress: onBack, style: 'destructive' }]
-    );
-  };
+    if (!book) {
+        return (
+            <SafeAreaView style={stylesLocal.safeArea}>
+                <View style={stylesLocal.container}>
+                    <Text style={stylesLocal.loadingText}>Carregando ou Livro não encontrado...</Text>
+                </View>
+            </SafeAreaView>
+        );
+    }
+    
+    // Mapeamento de status e cor
+    const currentStatus = statusMap[book.status] || { label: 'Desconhecido', color: colors.mutedForeground };
 
-  return (
-    <View style={stylesLocal.fullScreenContainer}>
-      <ScrollView>
+    // Função para renderizar estrelas
+    const renderRating = (rating) => {
+        const fullStars = Math.floor(rating);
+        const hasHalfStar = rating % 1 !== 0;
+        const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
         
-        {/* Bloco da Capa (Imagem e Botões Flutuantes) */}
-        <View style={stylesLocal.headerWrapper}>
-            <Image source={{ uri: book.cover }} style={stylesLocal.cover} resizeMode="cover" />
-            <View style={stylesLocal.headerOverlay} /> 
+        const stars = [];
+        for (let i = 0; i < fullStars; i++) {
+            stars.push(<Text key={`full${i}`} style={stylesLocal.starIcon}>★</Text>);
+        }
+        if (hasHalfStar) {
+            stars.push(<Text key="half" style={stylesLocal.starIcon}>★</Text>); // Usando estrela completa para simplicidade, mas representaria meia estrela
+        }
+        for (let i = 0; i < emptyStars; i++) {
+            stars.push(<Text key={`empty${i}`} style={stylesLocal.starIconEmpty}>☆</Text>);
+        }
+        return stars;
+    };
 
-            {/* Botão de Voltar: Usando Emoji */}
-            <TouchableOpacity onPress={onBack} style={stylesLocal.iconButtonBack}>
-                <Text style={stylesLocal.actionIconText}>👈</Text>
-            </TouchableOpacity>
 
-            {/* Botões de Ação: Usando Emojis */}
-            <View style={stylesLocal.iconButtonsRight}>
-                <TouchableOpacity onPress={() => onEdit(book.id)} style={stylesLocal.iconButton}>
-                    <Text style={stylesLocal.actionIconText}>✏️</Text>
+    return (
+        <SafeAreaView style={stylesLocal.safeArea}>
+            {/* Header Customizado */}
+            <View style={stylesLocal.header}>
+                <TouchableOpacity onPress={() => navigation.goBack()} style={stylesLocal.backButton}>
+                    <Icon name="arrow-left" size={24} color={colors.primaryForeground} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleDelete} style={[stylesLocal.iconButton, { backgroundColor: colors.destructive, opacity: 0.8 }]}>
-                    <Text style={[stylesLocal.actionIconText, { color: colors.primaryForeground }]}>🗑️</Text>
+                <Text style={stylesLocal.headerTitle}>Detalhes do Livro</Text>
+                <TouchableOpacity onPress={handleEdit} style={stylesLocal.headerAction}>
+                    <Icon name="edit" size={22} color={colors.primaryForeground} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleDelete} style={stylesLocal.headerAction}>
+                    <Icon name="trash-2" size={22} color={colors.primaryForeground} />
                 </TouchableOpacity>
             </View>
-        </View>
 
-        {/* Conteúdo Principal em Cards */}
-        <View style={stylesLocal.contentContainer}>
-          <View style={stylesLocal.card}>
-            {/* Título e Autor */}
-            <Text style={stylesLocal.title}>{book.title}</Text>
-            <Text style={stylesLocal.author}>por {book.author}</Text>
-
-            {/* Tags de Gênero, Ano e Status */}
-            <View style={stylesLocal.tagsContainer}>
-              <InfoTag text={book.genre} isPrimary={false} />
-              <InfoTag text={String(book.year)} emoji="🗓️" />
-              <InfoTag text={statusLabels[book.status]} isPrimary={false} />
-            </View>
-            
-            {/* Botões de Status (Quero Ler, Lendo, Lido) */}
-            <View style={stylesLocal.statusButtonsContainer}>
-                {['want-to-read', 'reading', 'read'].map(statusKey => (
-                    <TouchableOpacity
-                        key={statusKey}
-                        onPress={() => handleStatusChange(statusKey)}
-                        style={[
-                            stylesLocal.statusButton,
-                            book.status === statusKey && {
-                                backgroundColor: statusStyles[statusKey].bg,
-                                borderColor: statusStyles[statusKey].border,
-                            }
-                        ]}
-                    >
-                        <Text style={[
-                            stylesLocal.statusButtonText,
-                            book.status === statusKey && { color: statusStyles[statusKey].text, fontWeight: '600' }
-                        ]}>
-                            {statusLabels[statusKey]}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            {/* Seção de Avaliação (Visível quando 'Lido') */}
-            {book.status === 'read' && (
-                <View style={{ marginTop: spacing[4] }}>
-                    <Text style={stylesLocal.sectionTitleSmall}>Sua Avaliação</Text>
-                    <View style={stylesLocal.ratingSection}>
-                        <StarRating rating={book.rating || 0} size="sm" />
-                        <TouchableOpacity 
-                            onPress={handleReviewClick} 
-                            style={stylesLocal.editRatingButton}
-                        >
-                            <Text style={stylesLocal.editRatingText}>
-                                {book.rating ? 'Editar Avaliação' : 'Avaliar Livro'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            )}
-            
-            {/* Sinopse */}
-            <View style={{ marginTop: spacing[4] }}>
-                <Text style={stylesLocal.sectionTitleSmall}>Sinopse</Text>
-                <Text style={stylesLocal.synopsisText}>{book.synopsis}</Text>
-            </View>
-
-          </View>
-
-          {/* Avaliações da Comunidade */}
-          {book.status === 'read' && reviews.length > 0 && (
-            <View style={stylesLocal.card}>
-                <Text style={stylesLocal.sectionTitle}>Avaliações da Comunidade</Text>
-                {reviews.map((review, index) => (
-                    <View key={review.id} style={[stylesLocal.reviewItem, index < reviews.length - 1 && stylesLocal.reviewSeparator]}>
-                        <View style={stylesLocal.avatar}>
-                            {/* Ícone de usuário com Emoji */}
-                            <Text style={{ fontSize: 20 }}>👤</Text>
-                        </View>
-                        <View style={stylesLocal.reviewInfo}>
-                            <View style={stylesLocal.reviewHeader}>
-                                <Text style={stylesLocal.reviewUserName}>{review.userName}</Text>
-                                <StarRating rating={review.rating} size="sm" />
+            <ScrollView contentContainerStyle={stylesLocal.scrollContent}>
+                
+                {/* Seção 1: Capa e Título */}
+                <View style={stylesLocal.coverSection}>
+                    <Image source={{ uri: book.cover }} style={stylesLocal.coverImage} resizeMode="cover" />
+                    
+                    <View style={stylesLocal.infoBlock}>
+                        <Text style={stylesLocal.bookTitle}>{book.title}</Text>
+                        <Text style={stylesLocal.bookAuthor}>Por {book.author}</Text>
+                        
+                        {/* Status e Avaliação */}
+                        <View style={stylesLocal.statusAndRating}>
+                            <View style={[stylesLocal.statusBadge, { backgroundColor: currentStatus.color }]}>
+                                <Text style={stylesLocal.statusText}>{currentStatus.label}</Text>
                             </View>
-                            <Text style={stylesLocal.reviewDate}>{new Date(review.date).toLocaleDateString('pt-BR')}</Text>
-                            <Text style={stylesLocal.reviewComment}>{review.comment}</Text>
+
+                            {book.status === 'read' && (
+                                <View style={stylesLocal.ratingContainer}>
+                                    {renderRating(book.rating)}
+                                    <Text style={stylesLocal.ratingValue}>{book.rating}</Text>
+                                </View>
+                            )}
+                            {book.status === 'reading' && (
+                                <Text style={stylesLocal.progressText}>{book.progress}% concluído</Text>
+                            )}
                         </View>
                     </View>
-                ))}
-            </View>
-          )}
-
-        </View>
-      </ScrollView>
-
-      {/* --- MODAL DE AVALIAÇÃO (Simplificado) --- */}
-      <Modal
-        visible={showReviewModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowReviewModal(false)}
-      >
-        <View style={stylesLocal.modalOverlay}>
-          <View style={stylesLocal.modalContent}>
-            <Text style={stylesLocal.modalTitle}>Avaliar Livro</Text>
-            
-            <View style={stylesLocal.modalInputGroup}>
-                <Text style={stylesLocal.inputLabel}>Avaliação</Text>
-                <View style={{ flexDirection: 'row', justifyContent: 'center', marginVertical: spacing[2] }}>
-                    {[1, 2, 3, 4, 5].map(star => (
-                        <TouchableOpacity key={star} onPress={() => setRating(star)} style={{ paddingHorizontal: spacing[1] }}>
-                             {/* Usando o caractere Unicode da estrela para seleção */}
-                             <Text style={{ fontSize: 30, color: star <= rating ? colors.accent : colors.mutedForeground }}>★</Text>
-                        </TouchableOpacity>
-                    ))}
                 </View>
-            </View>
-            
-            <View style={stylesLocal.modalInputGroup}>
-                <Text style={stylesLocal.inputLabel}>Resenha</Text>
-                <TextInput style={[stylesLocal.textInput, stylesLocal.textArea]} multiline placeholder="O que você achou?" />
-            </View>
 
-            <View style={stylesLocal.modalFooter}>
-                <TouchableOpacity onPress={() => setShowReviewModal(false)} style={[stylesLocal.modalButton, { borderColor: colors.border, borderWidth: 1 }]}>
-                    <Text style={stylesLocal.modalButtonText}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleReviewSubmit} style={[stylesLocal.modalButton, { backgroundColor: colors.primary }]}>
-                    <Text style={[stylesLocal.modalButtonText, { color: colors.primaryForeground }]}>Salvar</Text>
-                </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
+                {/* Seção 2: Detalhes Técnicos */}
+                <View style={stylesLocal.detailsCard}>
+                    <Text style={stylesLocal.sectionTitle}>Detalhes</Text>
+                    
+                    <View style={stylesLocal.detailRow}>
+                        <Text style={stylesLocal.detailLabel}>Gênero:</Text>
+                        <Text style={stylesLocal.detailValue}>{book.genre}</Text>
+                    </View>
+                    <View style={stylesLocal.detailRow}>
+                        <Text style={stylesLocal.detailLabel}>Ano de Publicação:</Text>
+                        <Text style={stylesLocal.detailValue}>{book.year}</Text>
+                    </View>
+                    <View style={stylesLocal.detailRow}>
+                        <Text style={stylesLocal.detailLabel}>Total de Páginas:</Text>
+                        <Text style={stylesLocal.detailValue}>{book.totalPages}</Text>
+                    </View>
+                </View>
+
+                {/* Seção 3: Sinopse */}
+                <View style={stylesLocal.detailsCard}>
+                    <Text style={stylesLocal.sectionTitle}>Sinopse</Text>
+                    <Text style={stylesLocal.synopsisText}>{book.synopsis}</Text>
+                </View>
+
+            </ScrollView>
+        </SafeAreaView>
+    );
 }
-
 
 // --- ESTILOS ---
 const stylesLocal = StyleSheet.create({
-    fullScreenContainer: {
+    safeArea: {
         flex: 1,
-        backgroundColor: colors.background,
+        backgroundColor: colors.background || '#F4F4F5',
     },
-    // --- Header e Capa ---
-    headerWrapper: {
-        height: 320, 
-        position: 'relative',
-    },
-    cover: {
-        width: '100%',
-        height: 320,
-    },
-    headerOverlay: {
-        position: 'absolute',
-        inset: 0,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)', 
-        ...StyleSheet.absoluteFillObject,
-        top: '50%',
-        backgroundColor: 'rgba(255, 255, 255, 0.4)', 
-    },
-    iconButtonBack: {
-        position: 'absolute',
-        top: spacing[6],
-        left: spacing[4],
-        width: spacing[10], 
-        height: spacing[10],
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 9999,
-        alignItems: 'center',
+    container: {
+        flex: 1,
         justifyContent: 'center',
-    },
-    iconButtonsRight: {
-        position: 'absolute',
-        top: spacing[6],
-        right: spacing[4],
-        flexDirection: 'row',
-        gap: spacing[2],
-    },
-    iconButton: {
-        width: spacing[10],
-        height: spacing[10],
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        borderRadius: 9999,
         alignItems: 'center',
-        justifyContent: 'center',
     },
-    actionIconText: {
-        fontSize: 16, // Tamanho base para o emoji
-        color: colors.cardForeground, // Cor padrão, mas o emoji pode sobrescrever
-    },
-
-    // --- Conteúdo Principal ---
-    contentContainer: {
-        paddingHorizontal: spacing[4],
-        marginTop: -spacing[10], 
-        paddingBottom: spacing[4],
-        zIndex: 10,
-    },
-    card: {
-        backgroundColor: colors.card,
-        borderRadius: spacing[4], 
-        padding: spacing[6],
-        marginBottom: spacing[4],
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    title: {
-        fontSize: 24, 
-        fontWeight: 'bold',
-        marginBottom: spacing[1],
-        color: colors.foreground,
-    },
-    author: {
+    loadingText: {
         ...typography.body,
         color: colors.mutedForeground,
-        marginBottom: spacing[4],
     },
-    
-    // --- Tags ---
-    tagsContainer: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: spacing[2],
-        marginBottom: spacing[6],
-    },
-    tagContainer: {
+    // --- Header ---
+    header: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: spacing[3],
-        paddingVertical: spacing[1],
-        borderRadius: 9999,
-    },
-    tagEmoji: {
-        fontSize: 12,
-        marginRight: spacing[1],
-    },
-    tagPrimary: {
+        justifyContent: 'flex-start',
+        paddingVertical: spacing['4'],
+        paddingHorizontal: spacing['4'],
         backgroundColor: colors.primary,
+        ...shadows.sm,
     },
-    tagPrimaryText: {
-        ...typography.small,
+    backButton: {
+        paddingRight: spacing['4'],
+    },
+    headerTitle: {
+        ...typography.h4,
         color: colors.primaryForeground,
-        fontWeight: '500',
+        fontWeight: 'bold',
+        flex: 1, // Permite que o título ocupe o espaço restante
     },
-    tagMuted: {
-        backgroundColor: colors.muted,
+    headerAction: {
+        paddingLeft: spacing['4'],
     },
-    tagMutedText: {
-        ...typography.small,
-        color: colors.cardForeground,
-        fontWeight: '500',
+    // --- Scroll Content ---
+    scrollContent: {
+        padding: spacing['4'],
     },
-    
-    // --- Botões de Status ---
-    statusButtonsContainer: {
-        flexDirection: 'column',
-        gap: spacing[3],
-        marginBottom: spacing[4],
-    },
-    statusButton: {
-        backgroundColor: colors.muted,
-        padding: spacing[3],
-        borderRadius: 8, 
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: colors.muted,
-    },
-    statusButtonText: {
-        ...typography.body,
-        color: colors.cardForeground,
-    },
-    
-    // --- Seção de Avaliação ---
-    ratingSection: {
+    // --- Capa e Info Principal ---
+    coverSection: {
         flexDirection: 'row',
+        marginBottom: spacing['6'],
+        alignItems: 'flex-start',
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg || 10,
+        padding: spacing['4'],
+        ...shadows.sm,
+    },
+    coverImage: {
+        width: 120,
+        height: 180,
+        borderRadius: borderRadius.md || 8,
+        marginRight: spacing['4'],
+        backgroundColor: colors.border,
+    },
+    infoBlock: {
+        flex: 1,
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginTop: spacing[2],
-        marginBottom: spacing[4],
-        paddingVertical: spacing[2],
+        paddingVertical: spacing['1'],
     },
-    editRatingButton: {
-        paddingHorizontal: spacing[4],
-        paddingVertical: spacing[2],
-        borderRadius: 4,
-        borderWidth: 1,
-        borderColor: colors.primary,
-        backgroundColor: colors.primary,
+    bookTitle: {
+        ...typography.h3,
+        fontWeight: 'bold',
+        color: colors.foreground,
+        marginBottom: spacing['1'],
     },
-    editRatingText: {
+    bookAuthor: {
         ...typography.small,
+        color: colors.mutedForeground,
+        marginBottom: spacing['3'],
+    },
+    statusAndRating: {
+        marginTop: spacing['3'],
+    },
+    statusBadge: {
+        paddingVertical: spacing['1'],
+        paddingHorizontal: spacing['2'],
+        borderRadius: borderRadius.md || 8,
+        alignSelf: 'flex-start', // Garante que o badge não estique
+        marginBottom: spacing['2'],
+    },
+    statusText: {
+        ...typography.xs,
         color: colors.primaryForeground,
+        fontWeight: 'bold',
+    },
+    ratingContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    starIcon: {
+        color: '#FFD700', // Gold
+        fontSize: 18,
+    },
+    starIconEmpty: {
+        color: colors.border,
+        fontSize: 18,
+    },
+    ratingValue: {
+        ...typography.small,
+        marginLeft: spacing['1'],
+        fontWeight: '600',
+        color: colors.foreground,
+    },
+    progressText: {
+        ...typography.small,
+        color: colors.primary,
         fontWeight: '600',
     },
-    sectionTitleSmall: {
+    // --- Cards de Detalhes e Sinopse ---
+    detailsCard: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg || 10,
+        padding: spacing['4'],
+        marginBottom: spacing['4'],
+        ...shadows.sm,
+    },
+    sectionTitle: {
+        ...typography.h4,
+        fontWeight: 'bold',
+        color: colors.foreground,
+        marginBottom: spacing['3'],
+    },
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing['2'],
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+        paddingBottom: spacing['2'],
+    },
+    detailLabel: {
+        ...typography.body,
+        color: colors.mutedForeground,
+    },
+    detailValue: {
         ...typography.body,
         fontWeight: '600',
         color: colors.foreground,
     },
     synopsisText: {
-        ...typography.small,
-        color: colors.mutedForeground,
-        lineHeight: typography.small.lineHeight * 1.2,
-    },
-
-    // --- Avaliações da Comunidade ---
-    sectionTitle: {
-        fontSize: 18, 
-        fontWeight: '600',
-        marginBottom: spacing[4],
-        color: colors.foreground,
-    },
-    reviewItem: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        paddingVertical: spacing[3],
-    },
-    reviewSeparator: {
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        marginBottom: spacing[3],
-    },
-    avatar: {
-        width: spacing[10],
-        height: spacing[10],
-        borderRadius: 9999,
-        backgroundColor: colors.muted,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginRight: spacing[3],
-        flexShrink: 0,
-    },
-    reviewInfo: {
-        flex: 1,
-    },
-    reviewHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: spacing[1],
-    },
-    reviewUserName: {
         ...typography.body,
-        fontWeight: '500',
+        lineHeight: 22,
         color: colors.foreground,
-    },
-    reviewDate: {
-        fontSize: 12, 
-        color: colors.mutedForeground,
-        marginBottom: spacing[1],
-    },
-    reviewComment: {
-        ...typography.small,
-        color: colors.foreground,
-    },
-    
-    // --- Modal Styles ---
-    modalOverlay: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        padding: spacing[4],
-    },
-    modalContent: {
-        width: '90%',
-        backgroundColor: colors.card,
-        borderRadius: spacing[4],
-        padding: spacing[6],
-    },
-    modalTitle: {
-        fontSize: 20, 
-        fontWeight: '600',
-        marginBottom: spacing[1],
-    },
-    modalInputGroup: {
-        marginBottom: spacing[4],
-    },
-    inputLabel: {
-        ...typography.small,
-        fontWeight: '500',
-        marginBottom: spacing[1],
-    },
-    textInput: {
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: 4,
-        padding: spacing[3],
-        backgroundColor: colors.inputBackground,
-        color: colors.foreground,
-    },
-    textArea: {
-        height: 100,
-        textAlignVertical: 'top',
-    },
-    modalFooter: {
-        flexDirection: 'row',
-        gap: spacing[2],
-        marginTop: spacing[4],
-    },
-    modalButton: {
-        flex: 1,
-        paddingVertical: spacing[3],
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    modalButtonText: {
-        ...typography.button,
-        color: colors.foreground,
+        textAlign: 'justify',
     },
 });

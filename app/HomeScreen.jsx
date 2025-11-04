@@ -1,263 +1,203 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, Image } from 'react-native';
-import Theme from '../theme/index.js';
-// Não estou importando BookCard pois a seção "Tendências" foi substituída pelas estatísticas
-// import BookCard from '../components/BookCard/index.jsx';
+import { SafeAreaView, ScrollView, View, Text, StyleSheet, Image, TouchableOpacity, StatusBar } from 'react-native';
+// Assumindo que o arquivo de tema está em '../theme/index.js'
+import Theme, { colors, spacing, typography, borderRadius, shadows } from '../theme/index'; 
 
-const { colors, spacing, typography, borderRadius } = {
-  ...Theme,
-  colors: {
-      ...Theme.colors,
-      // Cores para os cards de estatísticas (ajustadas para o visual)
-      statCardBg: Theme.colors.card || '#FFFFFF',
-      // Cores do gênero mais lido
-      genreBg: '#D1FAE5', // Um verde claro similar ao usado
-      genreText: '#047857', // Um verde escuro
-      // Cor de destaque para o Header
-      headerBg: '#4C8C80', // Cor de fundo do Header (verde escuro)
-      headerText: '#FFFFFF',
-      
-      // Cores dos ícones (Feather/Lucide original no seu tema seria:
-      // blue, yellow, purple, green
-      icon1: '#60A5FA', // Total de Livros
-      icon2: '#10B981', // Livros Finalizados
-      icon3: '#FCD34D', // Média de Avaliação
-      icon4: '#A78BFA', // Lendo Agora
-  },
-  spacing: Theme.spacing || { 0: 0, 1: 4, 2: 8, 3: 12, 4: 16, 5: 20, 6: 24, 8: 32, 10: 40, 12: 48 },
-  typography: Theme.typography || { body: { fontSize: 16 }, h2: { fontSize: 24 }, h3: { fontSize: 20 }, small: { fontSize: 14 } }
-};
+import Feather from 'react-native-vector-icons/Feather';
 
-// --- Mocks de Dados da Tela ---
+// --- MOCK de Dados para a Home (conforme imagem) ---
 const userStats = {
-    totalBooks: 5,
-    finishedBooks: 3,
-    averageRating: 4.7,
-    readingNow: 1,
-    mostReadGenre: 'Fantasia',
-    mostReadGenreCount: 1,
+    userName: "chatgpt!",
+    avatarUrl: "https://i.pravatar.cc/150?img=47", 
+    stats: [
+        { icon: 'book-open', value: 5, label: "Total de Livros", iconBg: '#d7e4fd', iconColor: '#1D4ED8' },
+        { icon: 'check-square', value: 3, label: "Livros Finalizados", iconBg: '#c9f9e8', iconColor: '#047857' },
+        { icon: 'star', value: 4.7, label: "Média de Avaliação", iconBg: '#fff8d6', iconColor: '#A16207' },
+        { icon: 'trending-up', value: 1, label: "Lendo Agora", iconBg: '#fbe8ff', iconColor: '#86198F' },
+    ],
+    mostReadGenre: { name: 'Fantasia', count: 1 },
+    readingHistoryLabels: ['jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.'],
 };
 
-// --- Componente de Card de Estatística (pequeno) ---
-const StatCard = ({ title, value, iconEmoji, iconColor, iconBgColor }) => (
-    <View style={stylesLocal.statCard}>
-        <View style={[stylesLocal.statIcon, { backgroundColor: iconBgColor, borderColor: iconColor, borderWidth: 1 }]}>
-            <Text style={[stylesLocal.statIconEmoji, { fontSize: 20 }]}>{iconEmoji}</Text>
+
+// 💡 Componente de Cartão de Estatística
+const StatCard = ({ icon, value, label, iconBg, iconColor }) => (
+    <View style={styles.statCard}>
+        <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
+            <Feather name={icon} size={20} color={iconColor} />
         </View>
-        <Text style={stylesLocal.statValue}>{value}</Text>
-        <Text style={stylesLocal.statTitle}>{title}</Text>
+        <Text style={[typography.h2, { color: colors.foreground, marginTop: spacing[1] }]}>{value}</Text>
+        <Text style={[typography.small, { color: colors.mutedForeground }]}>{label}</Text>
     </View>
 );
 
-// --- Componente Principal ---
-export default function HomeScreen(){
-    const { totalBooks, finishedBooks, averageRating, readingNow, mostReadGenre, mostReadGenreCount } = userStats;
-    
+// 💡 Gráfico Simplificado (Placeholder)
+const ReadingHistoryChart = () => (
+    <View style={styles.chartPlaceholder}>
+        {/* Linhas do grid */}
+        <View style={[styles.chartGridLine, { top: '25%' }]} />
+        <View style={[styles.chartGridLine, { top: '50%' }]} />
+        <View style={[styles.chartGridLine, { top: '75%' }]} />
+
+        {/* Labels do eixo X */}
+        <View style={styles.chartXAxisLabels}>
+            {userStats.readingHistoryLabels.map(month => (
+                <Text key={month} style={[typography.xs, { color: colors.mutedForeground }]}>{month}</Text>
+            ))}
+        </View>
+    </View>
+);
+
+
+// 💡 Componente Principal
+export default function HomeScreen({ navigation }) { 
     return (
-        <ScrollView style={styles.container}>
+        <SafeAreaView style={styles.safeArea}>
+            {/* O status bar agora usa o tema do header */}
+            <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
             
-            {/* Header com Avatar e Saudação */}
-            <View style={stylesLocal.header}>
-                <View style={stylesLocal.headerContent}>
-                    {/* Imagem do Avatar (mock) */}
-                    <Image 
-                        source={{ uri: 'https://picsum.photos/60/60?random=1' }} 
-                        style={stylesLocal.avatar} 
-                    />
-                    <View style={stylesLocal.headerTextContainer}>
-                        <Text style={stylesLocal.welcome}>Olá, Maria!</Text>
-                        <Text style={stylesLocal.subtitle}>Bem-vindo de volta</Text>
+            {/* Header (com a cor primary) */}
+            <View style={styles.header}>
+                <Image 
+                    source={{ uri: userStats.avatarUrl }} 
+                    style={styles.avatar} 
+                />
+                <View>
+                    <Text style={[typography.body, { color: colors.primaryForeground, fontWeight: '500' }]}>Olá, {userStats.userName}</Text>
+                    <Text style={[typography.small, { color: colors.primaryForeground }]}>Bem-vindo de volta</Text>
+                </View>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.scrollContentContainer}>
+                
+                {/* Estatísticas (Grid) */}
+                <View style={styles.statsGrid}>
+                    {userStats.stats.map((stat, index) => (
+                        <StatCard key={index} {...stat} />
+                    ))}
+                </View>
+
+                {/* Gênero Mais Lido */}
+                <View style={styles.sectionContainer}>
+                    <Text style={[typography.label, styles.sectionTitle]}>Gênero Mais Lido</Text>
+                    <View style={styles.genreCard}>
+                        <Text style={[typography.body, styles.genreName]}>{userStats.mostReadGenre.name}</Text>
+                        <Text style={[typography.small, styles.genreCount]}>{userStats.mostReadGenre.count} livro</Text>
                     </View>
                 </View>
-            </View>
 
-            {/* Grid de Estatísticas (Row 1) */}
-            <View style={stylesLocal.statsGrid}>
-                <StatCard 
-                    title="Total de Livros" 
-                    value={totalBooks} 
-                    iconEmoji="📚" 
-                    iconColor={colors.icon1}
-                    iconBgColor={colors.icon1 + '20'} // Cor com transparência
-                />
-                <StatCard 
-                    title="Livros Finalizados" 
-                    value={finishedBooks} 
-                    iconEmoji="🧑‍🤝‍🧑" // Usando um emoji simples para 'parceiro' ou 'meta'
-                    iconColor={colors.icon2}
-                    iconBgColor={colors.icon2 + '20'}
-                />
-            </View>
-            
-            {/* Grid de Estatísticas (Row 2) */}
-            <View style={stylesLocal.statsGrid}>
-                <StatCard 
-                    title="Média de Avaliação" 
-                    value={averageRating} 
-                    iconEmoji="⭐" 
-                    iconColor={colors.icon3}
-                    iconBgColor={colors.icon3 + '20'}
-                />
-                <StatCard 
-                    title="Lendo Agora" 
-                    value={readingNow} 
-                    iconEmoji="📈" // Usando emoji para 'Gráfico de Crescimento' (similar a flecha)
-                    iconColor={colors.icon4}
-                    iconBgColor={colors.icon4 + '20'}
-                />
-            </View>
-
-            {/* --- Seção Gênero Mais Lido --- */}
-            <View style={stylesLocal.section}>
-                <Text style={stylesLocal.sectionTitle}>Gênero Mais Lido</Text>
-                <View style={stylesLocal.genreCard}>
-                    <Text style={stylesLocal.genreText}>{mostReadGenre}</Text>
-                    <Text style={stylesLocal.genreSubtitle}>{mostReadGenreCount} livro</Text>
+                {/* Histórico de Leituras */}
+                <View style={styles.sectionContainer}>
+                    <Text style={[typography.label, styles.sectionTitle]}>Histórico de Leituras</Text>
+                    <View style={styles.chartCard}>
+                        <ReadingHistoryChart />
+                    </View>
                 </View>
-            </View>
 
-            {/* --- Seção Histórico de Leituras --- */}
-            <View style={stylesLocal.section}>
-                <Text style={stylesLocal.sectionTitle}>Histórico de Leituras</Text>
-                {/* Mock para o Gráfico - Um View simples para simular a área do gráfico */}
-                <View style={stylesLocal.chartMock}>
-                    <Text style={stylesLocal.chartLabel}>[Simulação de Gráfico]</Text>
-                </View>
-            </View>
-            
-            <View style={{ height: spacing[8] }} /> {/* Espaço no final */}
-        </ScrollView>
+                {/* Espaço no final para garantir que o scroll não esbarre na TabBar nativa */}
+                <View style={{ height: spacing[10] }} /> 
+            </ScrollView>
+
+            {/* 🛑 A NavBar CUSTOMIZADA FOI REMOVIDA. A barra de abas será renderizada pelo MainTabNavigator. */}
+        </SafeAreaView>
     );
 }
 
-// --- ESTILOS ESPECÍFICOS DA HOMESCREEN ---
-const stylesLocal = StyleSheet.create({
-    header: { 
-        backgroundColor: colors.headerBg, 
-        paddingHorizontal: spacing[4], 
-        paddingVertical: spacing[8],
-        // Adiciona um arredondamento suave na parte inferior (opcional, para visual)
-        borderBottomLeftRadius: spacing[6], 
-        borderBottomRightRadius: spacing[6],
-        marginBottom: spacing[4],
+// --- Estilos ---
+const styles = StyleSheet.create({
+    safeArea: {
+        flex: 1,
+        backgroundColor: colors.background, 
     },
-    headerContent: {
+    header: {
+        backgroundColor: colors.primary, 
+        padding: spacing[4],
+        paddingTop: spacing[7], 
         flexDirection: 'row',
         alignItems: 'center',
+        borderBottomLeftRadius: borderRadius['xl'], 
+        borderBottomRightRadius: borderRadius['xl'],
+        marginBottom: spacing[4], 
+    },
+    scrollContentContainer: {
+        paddingHorizontal: spacing[4],
     },
     avatar: {
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        marginRight: spacing[4],
+        width: 50,
+        height: 50,
+        borderRadius: borderRadius.full,
+        marginRight: spacing[3],
         borderWidth: 2,
-        borderColor: colors.headerText, // Borda branca no avatar
+        borderColor: colors.primaryForeground,
+        backgroundColor: colors.muted, 
     },
-    headerTextContainer: {
-        justifyContent: 'center',
-    },
-    welcome: { 
-        fontSize: typography.h3.fontSize, 
-        fontWeight: '600', 
-        color: colors.headerText,
-        marginBottom: spacing[1],
-    },
-    subtitle: { 
-        color: colors.headerText + 'AA', // Um pouco mais transparente
-        ...typography.body,
-    },
-    
-    // --- Grid de Estatísticas ---
     statsGrid: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
         justifyContent: 'space-between',
-        paddingHorizontal: spacing[4],
-        marginBottom: spacing[3],
+        marginBottom: spacing[6],
     },
     statCard: {
-        flex: 1,
-        backgroundColor: colors.statCardBg,
-        borderRadius: spacing[3],
+        width: '48%', 
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.lg,
         padding: spacing[4],
-        marginHorizontal: spacing[2],
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 4,
-        elevation: 2,
+        marginBottom: spacing[3],
+        ...shadows.sm, 
     },
-    statIcon: {
+    iconContainer: {
         width: 40,
         height: 40,
-        borderRadius: 8,
-        alignItems: 'center',
+        borderRadius: borderRadius.sm, 
         justifyContent: 'center',
-        marginBottom: spacing[3],
+        alignItems: 'center',
     },
-    statIconEmoji: {
-        fontSize: 20,
+    sectionContainer: {
+        marginBottom: spacing[6],
     },
-    statValue: {
-        fontSize: typography.h2.fontSize,
-        fontWeight: 'bold',
-        color: colors.foreground,
-        marginBottom: spacing[1],
+    sectionTitle: {
+        color: colors.foreground, 
+        marginBottom: spacing[3]
     },
-    statTitle: {
-        ...typography.small,
-        color: colors.mutedForeground,
-    },
-
-    // --- Seções Gerais ---
-    section: { 
-        marginTop: spacing[4], 
-        paddingHorizontal: spacing[4] 
-    },
-    sectionTitle: { 
-        fontSize: typography.h3.fontSize, 
-        fontWeight: '600', 
-        marginBottom: spacing[3],
-        color: colors.foreground,
-    },
-
-    // --- Gênero Mais Lido ---
     genreCard: {
-        backgroundColor: colors.genreBg,
-        borderRadius: spacing[3],
+        backgroundColor: colors.statusReadBg || '#F0FDF4', // Mock de cor de fundo claro
         padding: spacing[4],
+        borderRadius: borderRadius.lg,
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: 80,
+        ...shadows.sm,
     },
-    genreText: {
-        fontSize: typography.body.fontSize,
-        fontWeight: '600',
-        color: colors.genreText,
+    genreName: {
+        color: colors.primary, 
+        fontWeight: '500'
     },
-    genreSubtitle: {
-        ...typography.small,
-        color: colors.genreText,
-        opacity: 0.8,
-        marginTop: spacing[1],
+    genreCount: {
+        color: colors.mutedForeground 
     },
-
-    // --- Histórico de Leituras (Mock) ---
-    chartMock: {
+    chartCard: {
         backgroundColor: colors.card,
-        borderRadius: spacing[3],
-        height: 200, // Altura fixa para simular o gráfico
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: colors.border,
+        borderRadius: borderRadius.lg,
+        padding: spacing[4],
+        ...shadows.sm,
     },
-    chartLabel: {
-        color: colors.mutedForeground,
-        ...typography.body,
+    // Estilos do Gráfico
+    chartPlaceholder: {
+        height: 150, 
+        justifyContent: 'flex-end', 
+        paddingBottom: spacing[2],
+        position: 'relative',
     },
-});
-
-// Mantendo seus estilos originais para o container
-const styles = StyleSheet.create({
-  container:{ flex:1, backgroundColor: Theme.colors.background },
+    chartGridLine: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: colors.border,
+    },
+    chartXAxisLabels: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing[1],
+        marginTop: spacing[2], 
+    },
 });
