@@ -1,13 +1,99 @@
-import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Dimensions, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  ScrollView, 
+  Dimensions, 
+  ActivityIndicator,
+  KeyboardTypeOptions, // 💡 Importado para tipos de input
+  ViewStyle,          // 💡 Importado para tipos de estilo
+  TextStyle,          // 💡 Importado para tipos de estilo
+} from 'react-native';
+
 // Componente de Ícone do Vector Icons
 import Icon from 'react-native-vector-icons/Feather'; 
 
-// 🚀 IMPORTAÇÃO DO CONTEXTO DE AUTENTICAÇÃO
-import { useAuth } from './context/AuthContext'; 
+// 💡 Importando o hook (sem .js) e tipos de navegação
+import { useAuth as useAuthJS } from './context/AuthContext'; 
+import { NavigationProp, ParamListBase } from '@react-navigation/native';
 
-// --- SIMULAÇÃO DO THEME (Mantido) ---
-const Theme = {
+// --- 💡 INÍCIO DA DEFINIÇÃO DE TIPOS (A "MÁGICA") ---
+
+// 1. Tipos para o Theme (para corrigir erros de estilo)
+interface ThemeColors {
+  background: string;
+  card: string;
+  primary: string;
+  primaryForeground: string;
+  secondary: string;
+  secondaryLight: string;
+  foreground: string;
+  mutedForeground: string;
+  border: string;
+  inputBackground: string;
+  inputBorder: string;
+}
+
+interface ThemeSpacing { [key: string]: number; }
+
+interface TypographyStyle {
+  fontSize: number;
+  fontWeight: '700' | '600' | '400';
+}
+
+interface ThemeTypography {
+  h1: TypographyStyle;
+  subtitle: TypographyStyle;
+  label: TypographyStyle;
+  input: TypographyStyle;
+  button: TypographyStyle;
+}
+
+interface ThemeBorderRadius { [key: string]: number; }
+
+interface AppTheme {
+  colors: ThemeColors;
+  spacing: ThemeSpacing;
+  typography: ThemeTypography;
+  borderRadius: ThemeBorderRadius;
+}
+
+// 2. Tipos para o AuthContext (para corrigir useAuth)
+interface AuthContextData {
+  isLoading: boolean;
+  login: (email: string, password: string) => void; // Ou Promise<void> se for async
+}
+
+// 3. Tipos para os Componentes
+interface AuthIconProps {
+  iconName: string;
+  bgColor: string;
+  iconColor: string;
+  shadowOpacity?: number;
+}
+
+interface CustomInputProps {
+  label: string;
+  placeholder: string;
+  secureTextEntry?: boolean;
+  keyboardType?: KeyboardTypeOptions;
+  iconName?: string; // 💡 O ícone é opcional
+  value: string;
+  onChangeText: (text: string) => void;
+}
+
+interface LoginScreenProps {
+  navigation: NavigationProp<ParamListBase>;
+}
+
+// --- FIM DA DEFINIÇÃO DE TIPOS ---
+
+
+// --- SIMULAÇÃO DO THEME (Tipado) ---
+const Theme: AppTheme = {
     colors: {
         background: '#fcfcfc',
         card: '#fff',
@@ -40,15 +126,27 @@ const Theme = {
 const { colors, spacing, typography, borderRadius } = Theme;
 const { width } = Dimensions.get('window');
 
-// --- Componente de Ícone Principal ---
-const AuthIcon = ({ iconName, bgColor, iconColor, shadowOpacity = 0.1 }) => (
+// 💡 Criando um hook 'useAuth' tipado
+const useAuth = (): AuthContextData => useAuthJS() as AuthContextData;
+
+
+// --- Componente de Ícone Principal (Tipado) ---
+const AuthIcon: React.FC<AuthIconProps> = ({ iconName, bgColor, iconColor, shadowOpacity = 0.1 }) => (
     <View style={[styles.authIconContainer, { backgroundColor: bgColor, shadowOpacity: shadowOpacity }]}>
         <Text style={{ fontSize: 32, color: iconColor, fontWeight: 'bold' }}>{iconName === 'book' ? '📚' : '🔖'}</Text>
     </View>
 );
 
-// --- Componente de Input com Estilo (REVISADO para aceitar props de estado) ---
-const CustomInput = ({ label, placeholder, secureTextEntry = false, keyboardType = 'default', iconName, value, onChangeText }) => (
+// --- Componente de Input com Estilo (Tipado) ---
+const CustomInput: React.FC<CustomInputProps> = ({ 
+  label, 
+  placeholder, 
+  secureTextEntry = false, 
+  keyboardType = 'default', 
+  iconName, 
+  value, 
+  onChangeText 
+}) => (
     <View style={styles.formField}>
         <Text style={styles.label}>{label}</Text>
         <View style={styles.inputWrapper}>
@@ -59,7 +157,6 @@ const CustomInput = ({ label, placeholder, secureTextEntry = false, keyboardType
                 keyboardType={keyboardType}
                 secureTextEntry={secureTextEntry}
                 placeholderTextColor="#bdbdbd" 
-                // 🚀 ADICIONADO: Conecta o estado local
                 value={value} 
                 onChangeText={onChangeText}
                 autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
@@ -68,24 +165,24 @@ const CustomInput = ({ label, placeholder, secureTextEntry = false, keyboardType
     </View>
 );
 
-// 🚀 COMPONENTE PRINCIPAL (REVISADO)
-export default function LoginScreen({ navigation }) {
-    // 💡 1. Obtém as funções e estados do contexto
+// --- COMPONENTE PRINCIPAL (Tipado) ---
+export default function LoginScreen({ navigation }: LoginScreenProps) {
+    // 💡 1. useAuth agora está 100% tipado
     const { login, isLoading } = useAuth();
     
-    // 💡 2. Estado local para os inputs
-    const [email, setEmail] = React.useState('');
-    const [password, setPassword] = React.useState('');
+    // 💡 2. Estado local tipado
+    const [email, setEmail] = useState<string>('');
+    const [password, setPassword] = useState<string>('');
 
     // 📌 Lógica para o botão 'Entrar'
     const handleLogin = () => {
-        // 🚀 O BOTÃO CHAMA A FUNÇÃO REAL DE LOGIN DO CONTEXTO
-        // Se o login for bem-sucedido, o 'isLoggedIn' muda, e o App.js renderiza o AppStack.
+        // O TS sabe que 'login' espera (string, string)
         login(email, password);
     };
 
     // 📌 Lógica para o link 'Esqueceu sua Senha?'
     const navigateToForgotPassword = () => {
+        // O TS sabe que 'navigation.navigate' espera um nome de rota
         navigation.navigate('ForgotPassword');
     };
 
@@ -113,22 +210,22 @@ export default function LoginScreen({ navigation }) {
                     <Text style={styles.cardTitle}>Bem-vindo de volta!</Text>
                     <Text style={styles.cardSubtitle}>Entre para continuar sua jornada literária</Text>
 
-                    {/* Campos de Input (AGORA COM VALOR E ONCHANGETEXT) */}
+                    {/* Campos de Input */}
                     <CustomInput 
                         label="E-mail" 
                         placeholder="seu@email.com" 
                         keyboardType="email-address" 
                         iconName="mail"
-                        value={email} // ⬅️ CONECTADO
-                        onChangeText={setEmail} // ⬅️ CONECTADO
+                        value={email} 
+                        onChangeText={setEmail}
                     />
                     <CustomInput 
                         label="Senha" 
                         placeholder="••••••••" 
                         secureTextEntry 
                         iconName="lock"
-                        value={password} // ⬅️ CONECTADO
-                        onChangeText={setPassword} // ⬅️ CONECTADO
+                        value={password}
+                        onChangeText={setPassword}
                     />
 
                     {/* Link Esqueceu sua Senha */}
@@ -136,11 +233,11 @@ export default function LoginScreen({ navigation }) {
                         <Text style={styles.forgotPasswordText}>Esqueceu sua senha?</Text>
                     </TouchableOpacity>
 
-                    {/* Botão Entrar (AGORA COM LÓGICA DE LOADING) */}
+                    {/* Botão Entrar */}
                     <TouchableOpacity 
                         style={[styles.primaryButton, isLoading && { opacity: 0.7 }]} 
                         onPress={handleLogin}
-                        disabled={isLoading} // ⬅️ Desabilita durante o loading
+                        disabled={isLoading} // ⬅️ O TS sabe que 'isLoading' é boolean
                     >
                         {isLoading ? (
                             <ActivityIndicator color={colors.primaryForeground} />
@@ -174,8 +271,38 @@ export default function LoginScreen({ navigation }) {
     );
 }
 
-// --- ESTILOS (Inalterados) ---
-const styles = StyleSheet.create({
+// --- 💡 Tipagem dos Estilos (Bônus para validação extra) ---
+type Styles = {
+  fullContainer: ViewStyle;
+  scrollContent: ViewStyle;
+  headerIconsContainer: ViewStyle;
+  fadedIcon: TextStyle;
+  authIconContainer: ViewStyle;
+  appName: TextStyle;
+  appSubtitle: TextStyle;
+  starIcon: TextStyle;
+  loginCard: ViewStyle;
+  cardTitle: TextStyle;
+  cardSubtitle: TextStyle;
+  formField: ViewStyle;
+  label: TextStyle;
+  inputWrapper: ViewStyle;
+  inputIcon: TextStyle; // Pode ser TextStyle também
+  input: TextStyle;
+  forgotPasswordLink: ViewStyle;
+  forgotPasswordText: TextStyle;
+  primaryButton: ViewStyle;
+  primaryButtonText: TextStyle;
+  dividerContainer: ViewStyle;
+  divider: ViewStyle;
+  dividerText: TextStyle;
+  registerLinkText: TextStyle;
+  registerLinkHighlight: TextStyle;
+  footerText: TextStyle;
+};
+
+// --- ESTILOS (Tipados) ---
+const styles = StyleSheet.create<Styles>({
     fullContainer: { flex: 1, backgroundColor: colors.background, },
     scrollContent: { flexGrow: 1, paddingTop: spacing['10'], paddingBottom: spacing['10'], alignItems: 'center', },
     headerIconsContainer: { alignItems: 'center', marginBottom: spacing['8'], position: 'relative', width: '100%', },
