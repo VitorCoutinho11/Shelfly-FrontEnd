@@ -1,92 +1,223 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  View, 
-  Text, 
-  TextInput, 
-  FlatList, 
-  StyleSheet, 
-  TouchableOpacity, 
-  SafeAreaView, 
-  StatusBar,
-  ListRenderItemInfo // 💡 Importado para tipar o renderItem da FlatList
+    View, 
+    Text, 
+    TextInput, 
+    FlatList, 
+    StyleSheet, 
+    TouchableOpacity, 
+    SafeAreaView, 
+    StatusBar,
+    ListRenderItemInfo, 
+    Alert 
 } from 'react-native';
 
-// Componentes necessários para a visualização
-import BookCard from '../components/BookCard/index'; // 💡 Removido .jsx
-import Icon from 'react-native-vector-icons/Feather';
-import Ionicons from 'react-native-vector-icons/Ionicons'; 
+// --- IMPORTANTE: AsyncStorage ---
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
-// Importa o Theme
-import Theme from '../theme/index'; // 💡 Removido .js
+// Navegação
+import { NavigationProp, ParamListBase, useFocusEffect } from '@react-navigation/native';
+
+// Componentes necessários
+import BookCard from '../components/BookCard/index'; 
+import Icon from 'react-native-vector-icons/Feather';
+import { FilterDropdown, FilterOption } from '../components/FilterDropdown'; 
+
+// Tema
+import Theme from '../theme/index'; 
 const { colors, spacing, typography, borderRadius, shadows } = Theme; 
 
-// --- DEFINIÇÃO DE TIPOS ---
+// --- CONSTANTES E TIPOS CORRIGIDOS ---
 
-// 💡 1. Definimos um tipo para o status do livro
 type BookListStatus = 'Lido' | 'Lendo' | 'Quero Ler';
 
-// 💡 2. Criamos a interface para o objeto Livro (baseado no seu mock)
 interface BookListItem {
-  id: string;
-  title: string;
-  author: string;
-  cover: string;
-  status: BookListStatus;
-  rating?: number; // Propriedade opcional (pode não existir)
-  progress?: number; // Propriedade opcional
-  coverImage: string;
+    id: string;
+    title: string;
+    author: string;
+    cover: string;
+    status: BookListStatus;
+    rating?: number; 
+    progress?: number; 
+    coverImage: string;
+    registrationDate: Date; 
+    genre: string; 
+    publicationYear: number; 
+    synopsis: string; 
+    totalPages: number; 
+    userReview?: string; 
+    pagesRead?: number; 
 }
 
-// 💡 3. Importamos os tipos de navegação
-import { NavigationProp, ParamListBase } from '@react-navigation/native';
-
-// 💡 4. Definimos as props que o componente BooksListScreen recebe
 interface BooksListScreenProps {
-  navigation: NavigationProp<ParamListBase>;
+    navigation: NavigationProp<ParamListBase>;
 }
 
-// --- Fim dos Tipos ---
+const ASYNC_STORAGE_KEY = '@BookList'; 
 
-
-// 💡 5. Aplicamos o tipo ao seu array de mock data
-const sample: BookListItem[] = [
-  // Mock data
-  { id:'1', title:'O Nome do Vento', author:'Patrick Rothfuss', cover:'https://picsum.photos/200/300?random=1', status:'Lido', rating:4.5, coverImage: 'URL_CAPA_1' },
-  { id:'2', title:'A Paciente Silenciosa', author:'Alex Michaelides', cover:'https://picsum.photos/200/300?random=2', status:'Lendo', progress:65, coverImage: 'URL_CAPA_2' },
-  { id:'3', title:'Orgulho e Preconceito', author:'Jane Austen', cover:'https://picsum.photos/200/300?random=3', status:'Quero Ler', coverImage: 'URL_CAPA_3' },
-  { id:'4', title:'Fundação', author:'Isaac Asimov', cover:'https://picsum.photos/200/300?random=4', status:'Lido', rating:3.5, coverImage: 'URL_CAPA_4' },
-  { id:'5', title:'O Hobbit', author:'J.R.R. Tolkien', cover:'https://picsum.photos/200/300?random=5', status:'Lido', rating:5.0, coverImage: 'URL_CAPA_5' },
+// MOCK DATA COMPLETO: Usado apenas na primeira vez que o AsyncStorage está vazio.
+const initialMockData: BookListItem[] = [
+    { 
+        id:'2', 
+        title:'A Paciente Silenciosa', 
+        author:'Alex Michaelides', 
+        cover:'https://picsum.photos/400/600?random=2', 
+        status:'Lido', 
+        progress:100, 
+        coverImage: 'https://picsum.photos/400/600?random=2', 
+        registrationDate: new Date('2024-05-20'), 
+        genre: 'Mistério', 
+        publicationYear: 2019, 
+        synopsis: 'Uma psicoterapeuta se recusa a falar após ser acusada de matar seu marido.', 
+        totalPages: 336,
+        pagesRead: 336, 
+    },
+    { 
+        id:'3', 
+        title:'1984', 
+        author:'George Orwell', 
+        cover:'https://picsum.photos/400/600?random=3', 
+        status:'Lendo', 
+        progress: 35, 
+        coverImage: 'https://picsum.photos/400/600?random=3', 
+        registrationDate: new Date('2024-08-15'), 
+        genre: 'Ficção Científica', 
+        publicationYear: 1949, 
+        synopsis: 'Em um futuro distópico, a sociedade é vigiada pelo Grande Irmão.', 
+        totalPages: 416,
+        pagesRead: 146, 
+    },
+    { 
+        id:'4', 
+        title:'O Morro dos Ventos Uivantes', 
+        author:'Emily Brontë', 
+        cover:'https://picsum.photos/400/600?random=4', 
+        status:'Quero Ler', 
+        progress: 0, 
+        coverImage: 'https://picsum.photos/400/600?random=4', 
+        registrationDate: new Date('2024-09-01'), 
+        genre: 'Romance Gótico', 
+        publicationYear: 1847, 
+        synopsis: 'A intensa e trágica história de amor entre Heathcliff e Catherine Earnshaw.', 
+        totalPages: 440,
+        pagesRead: 0,
+    }
 ];
 
 
-// 💡 6. Aplicamos a interface de Props ao componente
 export default function BooksListScreen({ navigation }: BooksListScreenProps) {
-    // 💡 7. Tipamos o estado (embora o TS já inferisse 'string' aqui)
-    const [searchText, setSearchText] = React.useState<string>('');
+    const [searchText, setSearchText] = useState<string>('');
+    const [isDropdownVisible, setIsDropdownVisible] = useState(false);
     
-    // 💡 8. Tipamos o parâmetro 'text'
+    const [allBooks, setAllBooks] = useState<BookListItem[]>([]);
+    const [displayedBooks, setDisplayedBooks] = useState<BookListItem[]>([]); 
+    const [selectedSort, setSelectedSort] = useState<FilterOption>('Data de Cadastro'); 
+
+
+    // --- FUNÇÕES DE CARREGAMENTO E PERSISTÊNCIA ---
+
+    const loadBooksFromStorage = useCallback(async () => {
+        try {
+            const storedData = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
+            let bookList: BookListItem[] = [];
+
+            if (storedData) {
+                // Se houver dados, parse e rehidrate as datas
+                bookList = JSON.parse(storedData).map((b: any) => ({
+                    ...b,
+                    registrationDate: new Date(b.registrationDate)
+                }));
+            } else {
+                // Primeira vez: usa os mocks e salva a lista COMPLETA
+                bookList = initialMockData.map(b => ({ ...b, registrationDate: new Date(b.registrationDate) }));
+                await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(bookList));
+            }
+
+            setAllBooks(bookList); 
+        } catch (error) {
+            console.error("Erro ao carregar livros:", error);
+            Alert.alert("Erro de Carga", "Não foi possível carregar a sua biblioteca.");
+        }
+    }, []);
+
+    // RECARREGA AO ENTRAR NA TELA
+    useFocusEffect(
+        useCallback(() => {
+            loadBooksFromStorage();
+        }, [loadBooksFromStorage])
+    );
+    
+    
+    // --- FUNÇÃO PRINCIPAL DE ORDENAÇÃO ---
+    const sortBooks = (option: FilterOption, list: BookListItem[]): BookListItem[] => {
+        const sortedList = [...list]; 
+
+        switch (option) {
+            case 'Data de Cadastro':
+                sortedList.sort((a, b) => b.registrationDate.getTime() - a.registrationDate.getTime());
+                break;
+            case 'Título':
+                sortedList.sort((a, b) => a.title.toLowerCase().localeCompare(b.title.toLowerCase()));
+                break;
+            case 'Autor':
+                sortedList.sort((a, b) => a.author.toLowerCase().localeCompare(b.author.toLowerCase()));
+                break;
+            case 'Avaliação':
+                sortedList.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+                break;
+            default:
+                break;
+        }
+
+        return sortedList;
+    };
+    
+    // --- USE EFFECT PARA APLICAR FILTRAGEM E ORDENAÇÃO ---
+    useEffect(() => {
+        let filteredList = [...allBooks];
+
+        if (searchText) {
+            const lowerSearchText = searchText.toLowerCase();
+            filteredList = filteredList.filter(book => 
+                book.title.toLowerCase().includes(lowerSearchText) || 
+                book.author.toLowerCase().includes(lowerSearchText) ||
+                book.genre.toLowerCase().includes(lowerSearchText) 
+            );
+        }
+
+        const finalDisplayedList = sortBooks(selectedSort, filteredList);
+        
+        setDisplayedBooks(finalDisplayedList);
+
+    }, [allBooks, selectedSort, searchText]); 
+    
+
     const handleSearch = (text: string) => { 
         setSearchText(text);
-        // Lógica de filtragem dos dados viria aqui
     };
     
     const handleAddBook = () => {
-        // Corrigido para a rota 'BookForm'
-        navigation.navigate('BookForm');
+        navigation.navigate('BookForm', {}); 
     };
     
-    // 💡 9. Tipamos o parâmetro 'bookId'
     const handleBookPress = (bookId: string) => {
-        // Isso implica que a rota 'BookDetail' espera { bookId: string }
         navigation.navigate('BookDetail', { bookId });
     };
 
-    // 💡 10. Tipamos o 'renderItem' da FlatList
+    const toggleDropdown = () => {
+        setIsDropdownVisible(!isDropdownVisible);
+    }
+
+    const handleSortSelect = (option: FilterOption) => {
+        setSelectedSort(option); 
+        setIsDropdownVisible(false); 
+    };
+    
     const renderBookItem = ({ item }: ListRenderItemInfo<BookListItem>) => (
-      <BookCard 
-          book={item} 
-          onPress={() => handleBookPress(item.id)} 
-      />
+        <BookCard 
+            book={item} 
+            onPress={() => handleBookPress(item.id)} 
+        />
     );
 
     return (
@@ -95,18 +226,17 @@ export default function BooksListScreen({ navigation }: BooksListScreenProps) {
 
             <View style={{ flex: 1 }}>
                 
-                {/* 1. ÁREA SUPERIOR: TÍTULO, BOTÃO ADICIONAR E BUSCA */}
+                {/* 1. ÁREA SUPERIOR */}
                 <View style={styles.topContainer}>
-                    {/* TÍTULO E BOTÃO ADICIONAR */}
                     <View style={styles.header}>
                         <Text style={styles.headerTitle}>Minha Biblioteca</Text>
+                        
+                        {/* BOTÃO ADICIONAR (ÚNICO NO CANTO) */}
                         <TouchableOpacity style={styles.addButton} onPress={handleAddBook}>
                             <Icon name="plus" size={18} color={colors.primary} /> 
                             <Text style={styles.addButtonText}>Adicionar</Text>
                         </TouchableOpacity>
                     </View>
-
-                    {/* BARRA DE BUSCA */}
                     <View style={styles.searchBarWrapper}>
                         <View style={styles.searchBar}>
                         <Icon name="search" size={20} color={colors.mutedForeground} style={{ marginRight: spacing['2'] }} />
@@ -121,36 +251,48 @@ export default function BooksListScreen({ navigation }: BooksListScreenProps) {
                     </View>
                 </View>
 
-                {/* 2. FILTRO E ORDENAÇÃO */}
+                {/* 2. BARRA DE FILTRO */}
                 <View style={styles.filterBar}>
-                    <TouchableOpacity style={styles.filterButton}>
-                        <Icon name="filter" size={16} color={colors.foreground} />
-                        <Text style={styles.filterText}>Filtrar</Text> 
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.filterButton}>
-                        <Icon name="arrow-down" size={16} color={colors.foreground} /> 
-                        <Text style={styles.filterText}>Data de Cadastro</Text>
+                    {/* Botão de Ordenação (Abre o Dropdown) */}
+                    <TouchableOpacity 
+                        style={[styles.filterButton, styles.sortButtonActive]} 
+                        onPress={toggleDropdown}
+                    >
+                        <Icon name="trending-up" size={16} color={colors.foreground} /> 
+                        <Text style={styles.filterText}>Ordenar: {selectedSort}</Text> 
                         <Icon name="chevron-down" size={16} color={colors.foreground} style={{ marginLeft: spacing['1'] }} />
                     </TouchableOpacity>
+                    <Text style={styles.countText}>
+                        {displayedBooks.length} livro{displayedBooks.length !== 1 ? 's' : ''}
+                    </Text>
                 </View>
 
                 {/* 3. LISTA DE LIVROS */}
                 <FlatList
-                    data={sample}
-                    keyExtractor={item => item.id} // TS sabe que 'item' é BookListItem
+                    data={displayedBooks} 
+                    keyExtractor={item => item.id} 
                     numColumns={2}
                     columnWrapperStyle={styles.columnWrapper}
                     contentContainerStyle={styles.listContent}
-                    renderItem={renderBookItem} // 💡 Usando a função tipada
+                    renderItem={renderBookItem} 
+                    ListEmptyComponent={<Text style={styles.emptyText}>Nenhum livro encontrado. 📚</Text>}
                 />
             </View>
+
+            {/* 4. RENDERIZAÇÃO DO DROPDOWN */}
+            <FilterDropdown 
+                isVisible={isDropdownVisible}
+                onClose={toggleDropdown}
+                onSelect={handleSortSelect}
+                selectedOption={selectedSort}
+                topPosition={165 + spacing['3']} 
+                leftPosition={spacing['6']} 
+            />
         </SafeAreaView>
     );
 }
 
 // --- ESTILOS ---
-// 💡 Nenhuma alteração necessária nos estilos!
 const styles = StyleSheet.create({
     safeArea: { 
         flex: 1, 
@@ -167,6 +309,8 @@ const styles = StyleSheet.create({
         paddingTop: spacing['4'], 
         paddingBottom: spacing['3'], 
         backgroundColor: colors.primary, 
+        // Altura restaurada (ou ajustada, já que o botão reset não está mais lá)
+        minHeight: 56, 
     },
     headerTitle: {
         fontSize: typography.h3?.fontSize || 24, 
@@ -180,11 +324,7 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.md || 8, 
         paddingVertical: spacing['2'],
         paddingHorizontal: spacing['3'],
-        shadowColor: shadows.sm?.shadowColor, 
-        shadowOffset: shadows.sm?.shadowOffset,
-        shadowOpacity: shadows.sm?.shadowOpacity,
-        shadowRadius: shadows.sm?.shadowRadius,
-        elevation: shadows.sm?.elevation,
+        ...shadows.sm,
     },
     addButtonText: {
         fontSize: typography.small?.fontSize || 14,
@@ -204,11 +344,7 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.lg || 10,
         paddingHorizontal: spacing['4'],
         height: 48,
-        shadowColor: shadows.sm?.shadowColor,
-        shadowOffset: shadows.sm?.shadowOffset,
-        shadowOpacity: shadows.sm?.shadowOpacity,
-        shadowRadius: shadows.sm?.shadowRadius,
-        elevation: shadows.sm?.elevation,
+        ...shadows.sm,
     },
     searchInput: {
         flex: 1,
@@ -218,12 +354,12 @@ const styles = StyleSheet.create({
     },
     filterBar: {
         flexDirection: 'row',
-        justifyContent: 'flex-start',
+        justifyContent: 'space-between', 
+        alignItems: 'center',
         paddingHorizontal: spacing['6'],
         paddingTop: spacing['4'], 
         paddingBottom: spacing['4'],
         backgroundColor: colors.background, 
-        gap: spacing['3'],
         borderBottomWidth: 1, 
         borderBottomColor: colors.border,
     },
@@ -237,10 +373,19 @@ const styles = StyleSheet.create({
         borderRadius: borderRadius.md || 8,
         backgroundColor: colors.card, 
     },
+    sortButtonActive: {
+        borderColor: colors.border, 
+        backgroundColor: colors.card,
+    },
     filterText: {
         fontSize: typography.small?.fontSize || 14,
         color: colors.foreground,
         marginLeft: spacing['1'],
+    },
+    countText: {
+        fontSize: typography.small?.fontSize || 14,
+        color: colors.mutedForeground,
+        fontWeight: '500',
     },
     columnWrapper: {
         justifyContent: 'space-between',
@@ -250,4 +395,10 @@ const styles = StyleSheet.create({
     listContent: {
         paddingTop: spacing['4'],
     },
+    emptyText: {
+        textAlign: 'center',
+        marginTop: spacing['8'],
+        fontSize: 18, 
+        color: colors.mutedForeground,
+    }
 });

@@ -1,515 +1,990 @@
-import React, { useState, useEffect } from 'react';
-import { 
-    View, 
-    Text, 
-    ScrollView, 
-    TouchableOpacity, 
-    StyleSheet, 
-    Image, 
-    Alert,
-    SafeAreaView,
-    // 💡 Importando tipos de Estilo
-    ViewStyle,
-    TextStyle,
-    ImageStyle
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { 
+    View, 
+    Text, 
+    ScrollView, 
+    StyleSheet, 
+    TouchableOpacity, 
+    ImageBackground, 
+    Alert,
+    Modal,
+    TextInput,
+    Animated,
+    KeyboardAvoidingView,
+    Platform,
+    ActivityIndicator
 } from 'react-native';
+
+// Ícones e Navegação
 import Icon from 'react-native-vector-icons/Feather';
+import StarIcon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { RouteProp, useRoute, useNavigation, NavigationProp } from '@react-navigation/native';
+import { AppStackParamList } from '.'; 
 
-// 💡 Importando tipos de Navegação
-import { NavigationProp, RouteProp } from '@react-navigation/native';
+// --- IMPORTANTE: AsyncStorage ---
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
-// Mocks e Tema
-// 💡 CORRIGIDO: Removida a extensão .js
-import Theme from '../theme/index'; 
+// Tema
+import Theme from '../theme/index'; 
+const { colors, spacing, typography, borderRadius, shadows } = Theme; 
 
-// --- 💡 SIMULAÇÃO DE TIPOS DO THEME ---
-// (Baseado nos estilos que você está usando neste arquivo)
-interface ThemeColors {
-  background: string;
-  primary: string;
-  primaryForeground: string;
-  mutedForeground: string;
-  foreground: string;
-  card: string;
-  border: string;
-  [key: string]: string; // Permite cores extras
-}
-interface ThemeSpacing { [key: string]: number; }
-interface TypographyStyle {
-  fontSize: number;
-  fontWeight?: 'bold' | 'normal' | '100' | '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
-  color?: string;
-  lineHeight?: number;
-  textAlign?: 'auto' | 'left' | 'right' | 'center' | 'justify';
-}
-interface ThemeTypography {
-  body: TypographyStyle;
-  h3: TypographyStyle;
-  h4: TypographyStyle;
-  small: TypographyStyle;
-  xs: TypographyStyle;
-}
-interface ThemeBorderRadius {
-  lg: number;
-  md: number;
-}
-type ShadowStyle = Pick<ViewStyle, 'shadowColor' | 'shadowOffset' | 'shadowOpacity' | 'shadowRadius' | 'elevation'>;
-interface ThemeShadows {
-  sm: ShadowStyle;
-}
-interface AppTheme {
-  colors: ThemeColors;
-  spacing: ThemeSpacing;
-  typography: ThemeTypography;
-  borderRadius: ThemeBorderRadius;
-  shadows: ThemeShadows;
+// --- DEFINIÇÃO DE TIPOS E DADOS INICIAIS (NÃO MOCKS) ---
+type BookListStatus = 'Lido' | 'Lendo' | 'Quero Ler';
+
+interface BookListItem {
+    id: string;
+    title: string;
+    author: string;
+    cover: string;
+    status: BookListStatus;
+    rating?: number; 
+    progress?: number; 
+    coverImage: string;
+    registrationDate: Date;
+    genre: string; 
+    publicationYear: number; 
+    synopsis: string; 
+    totalPages: number; 
+    userReview?: string; 
+    pagesRead?: number; 
 }
 
-// 💡 Aplicando o tipo ao Theme importado
-const { colors, spacing, typography, borderRadius, shadows } = Theme as AppTheme;
-// --- FIM DA SIMULAÇÃO DE TIPOS ---
+// Chave para armazenar a LISTA DE LIVROS no AsyncStorage
+const ASYNC_STORAGE_KEY = '@BookList'; 
 
-
-// --- 💡 DEFINIÇÃO DE TIPOS DE DADOS ---
-
-type BookStatus = 'want-to-read' | 'reading' | 'read';
-
-// Usando uma União Discriminada para o tipo Book
-interface BookBase {
-  id: string;
-  title: string;
-  author: string;
-  cover: string;
-  genre: string;
-  year: number;
-  totalPages: number;
-  synopsis: string;
-}
-
-interface BookToRead extends BookBase {
-  status: 'want-to-read';
-}
-
-interface BookReading extends BookBase {
-  status: 'reading';
-  progress: number;
-}
-
-interface BookRead extends BookBase {
-  status: 'read';
-  rating: number;
-}
-
-// O tipo Book é a união dos três
-type Book = BookToRead | BookReading | BookRead;
-
-interface StatusDisplay {
-  label: string;
-  color: string;
-}
-
-// Tipo para o statusMap
-type StatusMap = {
-  [key in BookStatus]: StatusDisplay;
-}
-
-// --- 💡 DEFINIÇÃO DE TIPOS DE NAVEGAÇÃO ---
-
-// (Baseado no seu index.tsx e BookListScreen.tsx)
-type AppStackParamList = {
-  MainTabs: undefined; 
-  BookDetail: { bookId: string }; // 👈 Esta é a tela atual
-  BookForm: { bookId?: string }; 
-};
-
-// Tipo específico para a prop 'route' desta tela
-type BookDetailScreenRouteProp = RouteProp<AppStackParamList, 'BookDetail'>;
-
-// Tipo para as props do componente
-interface BookDetailScreenProps {
-  navigation: NavigationProp<AppStackParamList>;
-  route: BookDetailScreenRouteProp;
-}
-
-// --- Fim dos Tipos ---
-
-
-// --- Mocks de Dados (Tipados) ---
-const mockBooks: Book[] = [
-    { 
-        id:'1', 
-        title:'O Nome do Vento', 
-        author:'Patrick Rothfuss', 
-        cover:'https://picsum.photos/400/600?random=101', 
-        genre: 'Fantasia',
-        year: 2007,
-        status:'read', 
-        rating: 4.5,
-        totalPages: 699,
-        synopsis: 'Uma história épica sobre Kvothe...',
-    },
-    { 
-        id:'2', 
-        title:'A Paciente Silenciosa', 
-        author:'Alex Michaelides', 
-        cover:'https://picsum.photos/400/600?random=102', 
-        genre: 'Thriller',
-        year: 2019,
-        status:'reading', 
-        progress: 65,
-        totalPages: 350,
-        synopsis: 'Um thriller psicológico...',
-    },
+// Lista inicial de livros (Dados expandidos para teste)
+const initialMockData: BookListItem[] = [
+    { 
+        id:'2', 
+        title:'A Paciente Silenciosa', 
+        author:'Alex Michaelides', 
+        cover:'https://picsum.photos/400/600?random=2', 
+        status:'Lido', 
+        progress:100, 
+        coverImage: 'https://picsum.photos/400/600?random=2', 
+        registrationDate: new Date('2024-05-20'), 
+        genre: 'Mistério', 
+        publicationYear: 2019, 
+        synopsis: 'Uma psicoterapeuta se recusa a falar após ser acusada de matar seu marido.', 
+        totalPages: 336,
+        pagesRead: 336, 
+    },
+    // Adicionado livro 2 (Lendo)
+    { 
+        id:'3', 
+        title:'1984', 
+        author:'George Orwell', 
+        cover:'https://picsum.photos/400/600?random=3', 
+        status:'Lendo', 
+        progress: 35, 
+        coverImage: 'https://picsum.photos/400/600?random=3', 
+        registrationDate: new Date('2024-08-15'), 
+        genre: 'Ficção Científica', 
+        publicationYear: 1949, 
+        synopsis: 'Em um futuro distópico, a sociedade é vigiada pelo Grande Irmão.', 
+        totalPages: 416,
+        pagesRead: 146, 
+    },
+    // Adicionado livro 3 (Quero Ler)
+    { 
+        id:'4', 
+        title:'O Morro dos Ventos Uivantes', 
+        author:'Emily Brontë', 
+        cover:'https://picsum.photos/400/600?random=4', 
+        status:'Quero Ler', 
+        progress: 0, 
+        coverImage: 'https://picsum.photos/400/600?random=4', 
+        registrationDate: new Date('2024-09-01'), 
+        genre: 'Romance Gótico', 
+        publicationYear: 1847, 
+        synopsis: 'A intensa e trágica história de amor entre Heathcliff e Catherine Earnshaw.', 
+        totalPages: 440,
+        pagesRead: 0,
+    }
 ];
 
-// 💡 Função tipada
-const getBookById = (id: string): Book | undefined => {
-    return mockBooks.find(book => book.id === id);
-};
+type BookDetailRouteProp = RouteProp<AppStackParamList, 'BookDetail'>;
 
-// Mapeamento de status (Tipado)
-const statusMap: StatusMap = {
-    'want-to-read': { label: 'Quero Ler', color: '#FCD34D' },
-    'reading': { label: 'Lendo', color: colors.primary },  
-    'read': { label: 'Lido', color: '#6366F1' },  
-};
 
-// --- Componente Principal (Tipado) ---
-export default function BookDetailScreen({ navigation, route }: BookDetailScreenProps) {
-    // 📌 Obtém o ID (o TS sabe que bookId é string)
-    const { bookId } = route.params; // Não precisa de '|| {}' pois é obrigatório
-    const [book, setBook] = useState<Book | null>(null);
+// =================================================================
+// 📚 COMPONENTE PRINCIPAL: BOOK DETAIL SCREEN
+// =================================================================
 
-    useEffect(() => {
-        if (bookId) {
-            const fetchedBook = getBookById(bookId);
-            setBook(fetchedBook || null); // Define como nulo se não for encontrado
-        }
-    }, [bookId]);
+export default function BookDetailScreen() {
+    const route = useRoute<BookDetailRouteProp>();
+    const navigation = useNavigation<NavigationProp<AppStackParamList>>();
+    // O ID do livro é recebido através dos parâmetros de navegação
+    const { bookId } = route.params;
 
-    // 💡 Guard Clause para segurança
-    const checkBookExists = (): boolean => {
-        if (!book) {
-            Alert.alert("Erro", "Livro não encontrado.");
+    const [book, setBook] = useState<BookListItem | null>(null); 
+    const [isLoading, setIsLoading] = useState(true); 
+
+    // Estados temporários do Modal de Avaliação
+    const [isRatingModalVisible, setIsRatingModalVisible] = useState(false);
+    const [tempRating, setTempRating] = useState<number>(0);
+    const [tempReview, setTempReview] = useState<string>(''); 
+
+    // Estados para Progresso e Animação
+    const [isProgressModalVisible, setIsProgressModalVisible] = useState(false);
+    const [tempPagesRead, setTempPagesRead] = useState<string>('0'); 
+    const fadeAnim = useRef(new Animated.Value(1)).current;
+    const [activeContentStatus, setActiveContentStatus] = useState<BookListStatus>('Quero Ler'); 
+
+    // --- 🔑 FUNÇÕES DE PERSISTÊNCIA (AsyncStorage) 🔑 ---
+    
+    // 1. Função para salvar o livro atual na lista
+    const saveBookData = async (updatedBook: BookListItem) => {
+        try {
+            const storedData = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
+            let bookList: BookListItem[] = storedData ? JSON.parse(storedData) : [];
+
+            // Encontra o índice e substitui o livro atualizado
+            const bookIndex = bookList.findIndex(b => b.id === updatedBook.id);
+            if (bookIndex > -1) {
+                bookList[bookIndex] = updatedBook;
+            } else {
+                bookList.push(updatedBook);
+            }
+
+            await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(bookList));
+            setBook(updatedBook); // Atualiza o estado local
+            return true;
+        } catch (error) {
+            console.error("Erro ao salvar dados do livro:", error);
+            Alert.alert("Erro de Salvamento", "Não foi possível salvar os detalhes atualizados do livro.");
             return false;
         }
-        return true;
+    };
+
+    // 2. Função para carregar a lista completa de livros (Usando useCallback para async/await)
+    const loadBookData = useCallback(async () => {
+        try {
+            const storedData = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
+            let bookList: BookListItem[] = [];
+            
+            if (storedData) {
+                // Se houver dados salvos, usa-os e rehidrata a data
+                bookList = JSON.parse(storedData).map((b: any) => ({
+                    ...b,
+                    registrationDate: new Date(b.registrationDate) 
+                }));
+            } else {
+                // Primeira carga: usa o mock expandido e salva para persistência futura
+                bookList = initialMockData;
+                // 💡 CORRIGIDO: Certificando-se de usar ASYNC_STORAGE_KEY (sem typo)
+                await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(initialMockData));
+            }
+            
+            // Encontra o livro atual na lista usando o bookId da navegação
+            const currentBook = bookList.find(b => b.id === bookId) || null;
+
+            if (currentBook) {
+                setBook(currentBook);
+                setActiveContentStatus(currentBook.status);
+                
+                // Prioriza 'pagesRead' se existir, ou usa a fórmula antiga como fallback
+                const pagesReadForInitialization = currentBook.pagesRead 
+                    || Math.round(((currentBook.progress || 0) / 100) * currentBook.totalPages);
+                
+                setTempPagesRead(pagesReadForInitialization.toString());
+                setTempRating(currentBook.rating || 0);
+                setTempReview(currentBook.userReview || '');
+
+            } else {
+                Alert.alert("Erro", "O livro solicitado não foi encontrado. O ID passado foi: " + bookId);
+            }
+
+        } catch (error) {
+            console.error("Erro ao carregar dados do livro:", error);
+            Alert.alert("Erro de Carregamento", "Não foi possível carregar os detalhes do livro.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, [bookId]);
+
+    // --- 🔄 USE EFFECT: Carregar Dados na Montagem ---
+    useEffect(() => {
+        loadBookData();
+    }, [loadBookData]);
+
+
+    // --- LÓGICAS DE AÇÃO ---
+    
+    const handleOpenRatingModal = () => {
+        setTempRating(book?.rating || 0);
+        setTempReview(book?.userReview || '');
+        setIsRatingModalVisible(true);
+    };
+
+    const handleSaveRating = async () => {
+        if (!book) return; 
+
+        if (tempRating === 0) {
+            Alert.alert("Atenção", "Por favor, selecione uma nota de 1 a 5 estrelas.");
+            return;
+        }
+
+        const updatedBook: BookListItem = { 
+            ...book, 
+            rating: tempRating, 
+            userReview: tempReview 
+        };
+        
+        const success = await saveBookData(updatedBook); 
+        
+        if (success) {
+            setIsRatingModalVisible(false);
+        }
+    };
+    
+    const handleUpdateStatus = (newStatus: BookListStatus) => {
+        if (!book || book.status === newStatus) return;
+
+        Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 150, 
+            useNativeDriver: true,
+        }).start(() => {
+            const updatedBook = { ...book, status: newStatus };
+            saveBookData(updatedBook).then((success) => {
+                if(success) {
+                    setActiveContentStatus(newStatus); 
+                    Animated.timing(fadeAnim, {
+                        toValue: 1,
+                        duration: 250, 
+                        useNativeDriver: true,
+                    }).start();
+                }
+            });
+        });
+    };
+
+    const handleSaveProgress = async () => {
+        if (!book) return;
+
+        const pages = parseInt(tempPagesRead || '0', 10);
+
+        if (isNaN(pages) || pages < 0) {
+            Alert.alert("Erro", "Por favor, insira um número de página válido.");
+            return;
+        }
+        
+        const newProgressPercent = Math.min(100, Math.round((pages / book.totalPages) * 100));
+        let updatedBook: BookListItem;
+
+        if (pages >= book.totalPages) {
+            updatedBook = { 
+                ...book, 
+                progress: 100, 
+                status: 'Lido',
+                pagesRead: book.totalPages 
+            };
+            await saveBookData(updatedBook);
+            handleUpdateStatus('Lido'); 
+        } else {
+            updatedBook = { 
+                ...book, 
+                progress: newProgressPercent,
+                pagesRead: pages 
+            };
+            await saveBookData(updatedBook);
+        }
+        
+        setIsProgressModalVisible(false);
+    };
+
+    const handleDelete = async () => {
+         Alert.alert(
+            "Confirmar Exclusão",
+            `Tem certeza que deseja remover "${book?.title}" da sua biblioteca?`,
+            [
+                { text: "Cancelar", style: "cancel" },
+                { 
+                    text: "Excluir", 
+                    style: "destructive", 
+                    onPress: async () => {
+                        try {
+                            const storedData = await AsyncStorage.getItem(ASYNC_STORAGE_KEY);
+                            let bookList: BookListItem[] = storedData ? JSON.parse(storedData) : [];
+                            
+                            const filteredList = bookList.filter(b => b.id !== bookId);
+
+                            await AsyncStorage.setItem(ASYNC_STORAGE_KEY, JSON.stringify(filteredList));
+                            navigation.goBack(); 
+                        } catch (error) {
+                            console.error("Erro ao deletar livro:", error);
+                            Alert.alert("Erro", "Não foi possível excluir o livro.");
+                        }
+                    } 
+                }
+            ]
+        );
+    }
+    
+    const StarRating = ({ rating, size }: { rating: number | undefined, size: number }) => {
+        const stars = [];
+        for (let i = 1; i <= 5; i++) {
+            stars.push(
+                <StarIcon
+                    key={i}
+                    name={i <= (rating || 0) ? 'star' : 'star-outline'}
+                    size={size}
+                    color={i <= (rating || 0) ? colors.accent : colors.mutedForeground} 
+                    style={{ marginRight: 2 }}
+                />
+            );
+        }
+        return <View style={{ flexDirection: 'row' }}>{stars}</View>;
+    };
+    
+    const renderUserReview = () => {
+        if (!book || !book.rating || book.rating === 0) return null; 
+
+        return (
+            <View style={styles.userReviewBox}>
+                <Text style={styles.synopsisTitle}>Sua Resenha</Text>
+                <View style={styles.communityReview}>
+                    <View style={[styles.avatar, { backgroundColor: colors.accent }]} /> 
+                    <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+                            <Text style={styles.reviewUser}>Você</Text>
+                            <StarRating rating={book.rating} size={18} />
+                        </View>
+                        <Text style={styles.reviewDate}>{new Date().toLocaleDateString('pt-BR')}</Text>
+                        <Text style={styles.reviewText}>{book.userReview || '(Sem resenha escrita)'}</Text>
+                        <TouchableOpacity style={styles.editReviewButton} onPress={handleOpenRatingModal}>
+                            <Text style={styles.editReviewText}>Editar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        );
+    };
+
+    const renderStatusButton = (statusValue: BookListStatus) => {
+        const isSelected = book?.status === statusValue;
+        
+        let backgroundColor: string = colors.card; 
+        
+        if (isSelected) {
+            switch(statusValue) {
+                case 'Quero Ler':
+                    backgroundColor = '#ECECF0'; 
+                    break;
+                case 'Lendo':
+                    backgroundColor = '#FFD70030'; 
+                    break;
+                case 'Lido':
+                    backgroundColor = '#00808030'; 
+                    break;
+            }
+        }
+
+        return (
+            <TouchableOpacity 
+                key={statusValue}
+                style={[styles.statusButton, { backgroundColor }]}
+                onPress={() => handleUpdateStatus(statusValue)}
+            >
+                <Text style={[
+                    styles.statusText, 
+                    isSelected && { fontWeight: '600' }
+                ]}>
+                    {statusValue}
+                </Text>
+            </TouchableOpacity>
+        );
+    };
+
+
+    if (isLoading) {
+        return (
+            <View style={[styles.container, styles.loadingContainer]}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={{ color: colors.foreground, marginTop: spacing['4'] }}>Carregando dados do livro...</Text>
+            </View>
+        );
+    }
+    
+    if (!book) { 
+        return (
+            <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>Livro não encontrado!</Text>
+                <TouchableOpacity onPress={() => navigation.goBack()}>
+                    <Text style={styles.goBackText}>Voltar</Text>
+                </TouchableOpacity>
+            </View>
+        );
     }
 
-    // Lógica de exclusão
-    const handleDelete = () => {
-        if (!checkBookExists()) return;
+    return (
+        <View style={styles.container}>
+            <ImageBackground 
+                source={{ uri: book.coverImage }} 
+                style={styles.headerImage}
+                imageStyle={{ resizeMode: 'cover' }}
+            >
+                <View style={styles.overlay} /> 
+                <View style={styles.headerButtons}>
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
+                        <Icon name="arrow-left" size={24} color={colors.card} />
+                    </TouchableOpacity>
+                    <View style={styles.rightButtons}>
+                        <TouchableOpacity onPress={() => navigation.navigate('BookForm', { bookId: book.id })} style={styles.iconButton}>
+                            <Icon name="edit" size={20} color={colors.card} />
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={handleDelete} style={[styles.iconButton, { backgroundColor: '#FF000040', borderRadius: 50 }]}>
+                            <Icon name="trash-2" size={20} color={colors.card} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </ImageBackground>
 
-        Alert.alert(
-            "Confirmar Exclusão",
-            `Tem certeza que deseja excluir "${book!.title}" da sua biblioteca?`, // '!' pois já checamos
-            [
-                { text: "Cancelar", style: "cancel" },
-                { 
-                    text: "Excluir", 
-                    onPress: () => {
-                        Alert.alert("Sucesso", `Livro "${book!.title}" excluído.`);
-                        navigation.goBack(); 
-                    },
-                    style: 'destructive'
-                }
-            ]
-        );
-    };
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                <View style={styles.detailsBox}>
+                    <Text style={styles.title}>{book.title}</Text>
+                    <Text style={styles.author}>por {book.author}</Text>
+                    
+                    <View style={styles.tagContainer}>
+                        <View style={styles.tag}><Text style={styles.tagText}>{book.genre}</Text></View>
+                        <View style={styles.tag}><Icon name="calendar" size={12} color={colors.mutedForeground} /><Text style={styles.tagText}> {book.publicationYear}</Text></View>
+                        <View style={[styles.tag, { backgroundColor: colors.primary + '30' }]}><Text style={[styles.tagText, { color: colors.primary, fontWeight: '600' }]}>{book.status}</Text></View>
+                    </View>
 
-    // Navega para a tela de edição
-    const handleEdit = () => {
-        if (!checkBookExists()) return;
-        navigation.navigate('BookForm', { bookId: book!.id });
-    };
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing['3'], marginBottom: spacing['6'] }}>
+                        {renderStatusButton('Quero Ler')}
+                        {renderStatusButton('Lendo')}
+                        {renderStatusButton('Lido')}
+                    </View>
 
-    if (!book) {
-        return (
-            <SafeAreaView style={stylesLocal.safeArea}>
-                <View style={stylesLocal.container}>
-                    <Text style={stylesLocal.loadingText}>Carregando ou Livro não encontrado...</Text>
-                </View>
-            </SafeAreaView>
-        );
-    }
-    
-    // Mapeamento de status (O TS sabe que book.status é válido)
-    const currentStatus = statusMap[book.status];
+                    <Animated.View style={{ opacity: fadeAnim }}>
+                        
+                        {activeContentStatus === 'Lendo' && (
+                            <View style={styles.progressContainer}>
+                                <View style={styles.progressHeader}>
+                                    <Text style={styles.progressTitle}>Progresso</Text>
+                                    <Text style={styles.progressPercent}>{(book.pagesRead || 0)} de {book.totalPages} páginas</Text>
+                                </View>
+                                <View style={styles.progressBarWrapper}>
+                                    <View style={[styles.progressBar, { width: `${book.progress || 0}%`, backgroundColor: colors.accent }]} />
+                                    <Text style={styles.progressPercentOverlay}>{book.progress || 0}%</Text>
+                                </View>
+                                <TouchableOpacity style={styles.updateProgressButton} onPress={() => setIsProgressModalVisible(true)}> 
+                                    <Icon name="book-open" size={16} color={colors.foreground} />
+                                    <Text style={styles.updateProgressText}>Atualizar Progresso</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
 
-    // Função para renderizar estrelas (Tipada)
-    const renderRating = (rating: number) => {
-        const fullStars = Math.floor(rating);
-        const hasHalfStar = rating % 1 !== 0;
-        const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
-        
-        const stars: JSX.Element[] = []; // 💡 Array de elementos JSX
-        for (let i = 0; i < fullStars; i++) {
-            stars.push(<Text key={`full${i}`} style={stylesLocal.starIcon}>★</Text>);
-        }
-        if (hasHalfStar) {
-            stars.push(<Text key="half" style={stylesLocal.starIcon}>★</Text>);
-        }
-        for (let i = 0; i < emptyStars; i++) {
-            stars.push(<Text key={`empty${i}`} style={stylesLocal.starIconEmpty}>☆</Text>);
-        }
-        return stars;
-    };
+                        {activeContentStatus === 'Lido' && (
+                            <View style={styles.ratingBox}>
+                                <Text style={styles.ratingTitle}>Sua Avaliação</Text>
+                                <StarRating rating={book.rating} size={28} /> 
+                                <TouchableOpacity style={styles.rateButton} onPress={handleOpenRatingModal}>
+                                    <Text style={styles.rateButtonText}>{book.rating ? 'Editar Avaliação' : 'Avaliar Livro'}</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        
+                    </Animated.View>
 
+                    <View style={styles.synopsisBox}>
+                        <Text style={styles.synopsisTitle}>Sinopse</Text>
+                        <Text style={styles.synopsisText}>{book.synopsis}</Text>
+                    </View>
+                    
+                    {renderUserReview()} 
 
-    return (
-        <SafeAreaView style={stylesLocal.safeArea}>
-            {/* Header Customizado */}
-            <View style={stylesLocal.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()} style={stylesLocal.backButton}>
-                    <Icon name="arrow-left" size={24} color={colors.primaryForeground} />
-                </TouchableOpacity>
-                <Text style={stylesLocal.headerTitle}>Detalhes do Livro</Text>
-                <TouchableOpacity onPress={handleEdit} style={stylesLocal.headerAction}>
-                    <Icon name="edit" size={22} color={colors.primaryForeground} />
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handleDelete} style={stylesLocal.headerAction}>
-                    <Icon name="trash-2" size={22} color={colors.primaryForeground} />
-                </TouchableOpacity>
-            </View>
+                    <View style={styles.communityRatingBox}>
+                        <Text style={styles.synopsisTitle}>Avaliações da Comunidade</Text>
+                        <View style={styles.communityReview}>
+                            <View style={styles.avatar} />
+                            <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%' }}>
+                                    <Text style={styles.reviewUser}>Outro Usuário</Text>
+                                    <StarRating rating={4} size={18} />
+                                </View>
+                                <Text style={styles.reviewDate}>08/11/2025</Text>
+                                <Text style={styles.reviewText}>Um livro que me prendeu do início ao fim!</Text>
+                            </View>
+                        </View>
+                    </View>
 
-            <ScrollView contentContainerStyle={stylesLocal.scrollContent}>
-                
-                {/* Seção 1: Capa e Título */}
-                <View style={stylesLocal.coverSection}>
-                    <Image source={{ uri: book.cover }} style={stylesLocal.coverImage} resizeMode="cover" />
-                    
-                    <View style={stylesLocal.infoBlock}>
-                        <Text style={stylesLocal.bookTitle}>{book.title}</Text>
-                        <Text style={stylesLocal.bookAuthor}>Por {book.author}</Text>
-                        
-                        {/* Status e Avaliação */}
-                        <View style={stylesLocal.statusAndRating}>
-                            <View style={[stylesLocal.statusBadge, { backgroundColor: currentStatus.color }]}>
-                                <Text style={stylesLocal.statusText}>{currentStatus.label}</Text>
-                            </View>
+                </View>
+            </ScrollView>
 
-                            {/* 💡 O TS sabe que 'book.rating' existe aqui */}
-                            {book.status === 'read' && (
-                                <View style={stylesLocal.ratingContainer}>
-                                    {renderRating(book.rating)}
-                                    <Text style={stylesLocal.ratingValue}>{book.rating}</Text>
-                                </View>
-                            )}
-                            {/* 💡 O TS sabe que 'book.progress' existe aqui */}
-                            {book.status === 'reading' && (
-                                <Text style={stylesLocal.progressText}>{book.progress}% concluído</Text>
-                            )}
-                        </View>
-                    </View>
-                </View>
+            <Modal
+                visible={isProgressModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsProgressModalVisible(false)}
+            >
+                <KeyboardAvoidingView 
+                    style={styles.modalOverlay} 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <View style={styles.modalContainer}>
+                        <TouchableOpacity style={styles.closeModalButton} onPress={() => setIsProgressModalVisible(false)}>
+                            <Icon name="x" size={24} color={colors.foreground} />
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>Atualizar Progresso</Text>
+                        <Text style={styles.modalSubtitle}>Atualize quantas páginas você já leu</Text>
 
-                {/* Seção 2: Detalhes Técnicos */}
-                <View style={stylesLocal.detailsCard}>
-                    <Text style={stylesLocal.sectionTitle}>Detalhes</Text>
-                    
-                    <View style={stylesLocal.detailRow}>
-                        <Text style={stylesLocal.detailLabel}>Gênero:</Text>
-                        <Text style={stylesLocal.detailValue}>{book.genre}</Text>
-                    </View>
-                    <View style={stylesLocal.detailRow}>
-                        <Text style={stylesLocal.detailLabel}>Ano de Publicação:</Text>
-                        <Text style={stylesLocal.detailValue}>{String(book.year)}</Text>
-                    </View>
-                    <View style={stylesLocal.detailRow}>
-                        <Text style={stylesLocal.detailLabel}>Total de Páginas:</Text>
-                        <Text style={stylesLocal.detailValue}>{String(book.totalPages)}</Text>
-                    </View>
-                </View>
+                        <Text style={styles.modalLabel}>Páginas Lidas</Text>
+                        <View style={styles.progressInputWrapper}>
+                            <TextInput 
+                                value={tempPagesRead}
+                                onChangeText={(text) => setTempPagesRead(text.replace(/[^0-9]/g, ''))}
+                                style={styles.modalProgressInput}
+                                keyboardType="numeric"
+                                placeholderTextColor={colors.mutedForeground}
+                                maxLength={String(book.totalPages).length + 1}
+                            />
+                            <View style={styles.spinnerIcon}>
+                                <TouchableOpacity 
+                                    onPress={() => setTempPagesRead(prev => String(Math.min(book.totalPages, parseInt(prev || '0') + 1)))}
+                                >
+                                    <Icon name="chevron-up" size={16} color={colors.foreground} />
+                                </TouchableOpacity>
+                                <TouchableOpacity 
+                                    onPress={() => setTempPagesRead(prev => String(Math.max(0, parseInt(prev || '0') - 1)))}
+                                >
+                                    <Icon name="chevron-down" size={16} color={colors.foreground} />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                        
+                        <Text style={styles.pagesTotalText}>
+                            De **{book.totalPages}** páginas totais
+                        </Text>
+                        
+                        <View style={styles.modalButtonContainer}>
+                            <TouchableOpacity style={styles.modalCancelButton} onPress={() => setIsProgressModalVisible(false)}>
+                                <Text style={styles.modalCancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.modalSaveButton} onPress={handleSaveProgress}>
+                                <Text style={styles.modalSaveText}>Salvar</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+            
+            <Modal
+                visible={isRatingModalVisible}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setIsRatingModalVisible(false)}
+            >
+                 <KeyboardAvoidingView 
+                    style={styles.modalOverlay} 
+                    behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                >
+                    <View style={styles.modalContainer}>
+                        <TouchableOpacity style={styles.closeModalButton} onPress={() => setIsRatingModalVisible(false)}>
+                            <Icon name="x" size={24} color={colors.foreground} />
+                        </TouchableOpacity>
+                        <Text style={styles.modalTitle}>Avaliar Livro</Text>
+                        <Text style={styles.modalSubtitle}>Compartilhe sua opinião sobre este livro</Text>
 
-                {/* Seção 3: Sinopse */}
-                <View style={stylesLocal.detailsCard}>
-                    <Text style={stylesLocal.sectionTitle}>Sinopse</Text>
-                    <Text style={stylesLocal.synopsisText}>{book.synopsis}</Text>
-                </View>
-
-            </ScrollView>
-        </SafeAreaView>
-    );
+                        <Text style={styles.modalLabel}>Avaliação</Text>
+                        <View style={styles.modalStarSelector}>
+                            {[1, 2, 3, 4, 5].map(star => (
+                                <TouchableOpacity key={star} onPress={() => setTempRating(star)}>
+                                    <StarIcon
+                                        name={star <= tempRating ? 'star' : 'star-outline'}
+                                        size={40}
+                                        color={star <= tempRating ? colors.accent : colors.border}
+                                    />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                        
+                        <Text style={styles.modalLabel}>Resenha (opcional)</Text>
+                        <TextInput 
+                            value={tempReview}
+                            onChangeText={setTempReview}
+                            placeholder="O que você achou deste livro?"
+                            style={styles.modalReviewInput}
+                            placeholderTextColor={colors.mutedForeground}
+                            multiline
+                        />
+                        
+                        <View style={styles.modalButtonContainer}>
+                            <TouchableOpacity style={styles.modalCancelButton} onPress={() => setIsRatingModalVisible(false)}>
+                                <Text style={styles.modalCancelText}>Cancelar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.modalSaveButton} onPress={handleSaveRating}>
+                                <Text style={styles.modalSaveText}>Salvar</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </KeyboardAvoidingView>
+            </Modal>
+        </View>
+    );
 }
 
-// --- 💡 Tipagem dos Estilos ---
-type Styles = {
-  safeArea: ViewStyle;
-  container: ViewStyle;
-  loadingText: TextStyle;
-  header: ViewStyle;
-  backButton: ViewStyle;
-  headerTitle: TextStyle;
-  headerAction: ViewStyle;
-  scrollContent: ViewStyle;
-  coverSection: ViewStyle;
-  coverImage: ImageStyle;
-  infoBlock: ViewStyle;
-  bookTitle: TextStyle;
-  bookAuthor: TextStyle;
-  statusAndRating: ViewStyle;
-  statusBadge: ViewStyle;
-  statusText: TextStyle;
-  ratingContainer: ViewStyle;
-  starIcon: TextStyle;
-  starIconEmpty: TextStyle;
-  ratingValue: TextStyle;
-  progressText: TextStyle;
-  detailsCard: ViewStyle;
-  sectionTitle: TextStyle;
-  detailRow: ViewStyle;
-  detailLabel: TextStyle;
-  detailValue: TextStyle;
-  synopsisText: TextStyle;
-};
-
-// --- ESTILOS (Tipados e Corrigidos) ---
-const stylesLocal = StyleSheet.create<Styles>({
-    safeArea: {
-        flex: 1,
-        backgroundColor: colors.background || '#F4F4F5',
-    },
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    loadingText: {
-        ...typography.body,
-        color: colors.mutedForeground,
-    },
-    // --- Header ---
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'flex-start',
-        paddingVertical: spacing['4'],
-        paddingHorizontal: spacing['4'],
-        backgroundColor: colors.primary,
-        ...shadows.sm,
-    },
-    backButton: {
-        paddingRight: spacing['4'],
-    },
-    headerTitle: {
-        ...typography.h4,
-        color: colors.primaryForeground,
-        fontWeight: 'bold',
-        flex: 1, 
-    },
-    headerAction: {
-        paddingLeft: spacing['4'],
-    },
-    // --- Scroll Content ---
-    scrollContent: {
-        padding: spacing['4'],
-    },
-    // --- Capa e Info Principal ---
-    coverSection: {
-        flexDirection: 'row',
-        marginBottom: spacing['6'],
-        alignItems: 'flex-start',
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.lg || 10,
-        padding: spacing['4'],
-        ...shadows.sm,
-    },
-    coverImage: {
-        width: 120,
-        height: 180,
-        borderRadius: borderRadius.md || 8,
-        marginRight: spacing['4'],
-        backgroundColor: colors.border,
-    },
-    infoBlock: {
-        flex: 1,
-        justifyContent: 'space-between',
-        paddingVertical: spacing['1'],
-    },
-    bookTitle: {
-        ...typography.h3,
-        fontWeight: 'bold',
-        color: colors.foreground,
-        marginBottom: spacing['1'],
-    },
-    bookAuthor: {
-        ...typography.small,
-        color: colors.mutedForeground,
-        marginBottom: spacing['3'],
-    },
-    statusAndRating: {
-        marginTop: spacing['3'],
-    },
-    statusBadge: {
-        paddingVertical: spacing['1'],
-        paddingHorizontal: spacing['2'],
-        borderRadius: borderRadius.md || 8,
-        alignSelf: 'flex-start',
-        marginBottom: spacing['2'],
-    },
-    statusText: {
-        ...typography.xs,
-        color: colors.primaryForeground,
-        fontWeight: 'bold',
-    },
-    ratingContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    starIcon: { // 💡 CORRIGIDO: É um ícone de texto
-        color: '#FFD700', 
-        fontSize: 18,
-    },
-    starIconEmpty: { // 💡 CORRIGIDO: É um ícone de texto
-        color: colors.border,
-        fontSize: 18,
-    },
-    ratingValue: {
-        ...typography.small,
-        marginLeft: spacing['1'],
-        fontWeight: '600',
-        color: colors.foreground,
-    },
-    progressText: {
-        ...typography.small,
-        color: colors.primary,
-        fontWeight: '600',
-    },
-    // --- Cards de Detalhes e Sinopse ---
-    detailsCard: {
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.lg || 10,
-        padding: spacing['4'],
-        marginBottom: spacing['4'],
-        ...shadows.sm,
-    },
-    sectionTitle: {
-        ...typography.h4,
-        fontWeight: 'bold',
-        color: colors.foreground,
-        marginBottom: spacing['3'],
-    },
-    detailRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: spacing['2'],
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-        paddingBottom: spacing['2'],
-    },
-    detailLabel: {
-        ...typography.body,
-        color: colors.mutedForeground,
-    },
-    detailValue: {
-        ...typography.body,
-        fontWeight: '600',
-        color: colors.foreground,
-    },
-    synopsisText: {
-        ...typography.body,
-        lineHeight: 22,
-        color: colors.foreground,
-        textAlign: 'justify',
-    },
+const styles = StyleSheet.create({
+    container: { 
+        flex: 1, 
+        backgroundColor: colors.background 
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    errorContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+    },
+    errorText: {
+        fontSize: typography.h3?.fontSize || 20,
+        color: colors.foreground,
+    },
+    goBackText: {
+        marginTop: spacing['4'],
+        color: colors.primary,
+        fontSize: typography.body?.fontSize || 16,
+    },
+    headerImage: {
+        width: '100%',
+        height: 200,     
+        justifyContent: 'space-between',
+    },
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.2)', 
+    },
+    headerButtons: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: spacing['4'],
+        paddingTop: spacing['6'],
+    },
+    iconButton: {
+        padding: spacing['2'],
+    },
+    rightButtons: {
+        flexDirection: 'row',
+        gap: spacing['3'],
+    },
+    scrollContent: {
+        paddingBottom: spacing['8'],
+    },
+    detailsBox: {
+        backgroundColor: colors.card,
+        borderTopLeftRadius: borderRadius.xl || 20,
+        borderTopRightRadius: borderRadius.xl || 20,
+        padding: spacing['6'],
+        paddingTop: spacing['10'], 
+        marginTop: -spacing['10'], 
+        ...shadows.lg,
+    },
+    title: {
+        fontSize: typography.h2?.fontSize || 28,
+        fontWeight: 'bold',
+        color: colors.foreground,
+        marginBottom: spacing['5'],
+        top: 15
+    },
+    author: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.mutedForeground,
+        marginBottom: spacing['4'],
+    },
+    tagContainer: {
+        flexDirection: 'row',
+        marginBottom: spacing['6'],
+        gap: spacing['2'],
+    },
+    tag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.muted,
+        borderRadius: borderRadius.lg || 10,
+        paddingHorizontal: spacing['3'],
+        paddingVertical: spacing['1'],
+    },
+    tagText: {
+        fontSize: typography.small?.fontSize || 14,
+        color: colors.foreground,
+    },
+    statusButton: {
+        flex: 1, 
+        borderRadius: borderRadius.md || 8,
+        padding: spacing['4'],
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+    },
+    statusText: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.foreground,
+    },
+    // --- Estilos de Progresso (Lendo) ---
+    progressContainer: {
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.md,
+        paddingVertical: spacing['4'],
+        marginBottom: spacing['6'],
+        borderWidth: 1,
+        borderColor: colors.border,
+        paddingHorizontal: spacing['4'],
+    },
+    progressHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: spacing['2'],
+    },
+    progressTitle: {
+        fontSize: typography.body?.fontSize || 16,
+        fontWeight: '500',
+        color: colors.foreground,
+    },
+    progressBarWrapper: {
+        height: 10,
+        backgroundColor: colors.muted,
+        borderRadius: borderRadius.sm,
+        justifyContent: 'center',
+        marginBottom: spacing['4'],
+    },
+    progressBar: {
+        height: '100%',
+        borderRadius: borderRadius.sm,
+    },
+    progressPercent: {
+        fontSize: typography.small?.fontSize || 14,
+        color: colors.mutedForeground,
+    },
+    progressPercentOverlay: {
+        position: 'absolute',
+        right: spacing['2'],
+        fontSize: typography.small?.fontSize || 14,
+        color: colors.card,
+        fontWeight: 'bold',
+    },
+    updateProgressButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing['3'],
+        borderRadius: borderRadius.md,
+        marginTop: spacing['3'],
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.background,
+    },
+    updateProgressText: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.foreground,
+        marginLeft: spacing['2'],
+        fontWeight: '500',
+    },
+    // --- Estilos de Avaliação (Lido) ---
+    ratingBox: {
+        marginBottom: spacing['6'],
+    },
+    ratingTitle: {
+        fontSize: typography.h4?.fontSize || 20,
+        fontWeight: '600',
+        color: colors.foreground,
+        marginBottom: spacing['2'],
+    },
+    rateButton: {
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: borderRadius.md || 8,
+        paddingVertical: spacing['3'],
+        marginTop: spacing['3'],
+        alignItems: 'center',
+        backgroundColor: colors.card,
+    },
+    rateButtonText: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.foreground,
+        fontWeight: '500',
+    },
+    // --- Estilos da Sinopse ---
+    synopsisBox: {
+        marginBottom: spacing['6'],
+    },
+    synopsisTitle: {
+        fontSize: typography.h4?.fontSize || 20,
+        fontWeight: '600',
+        color: colors.foreground,
+        marginBottom: spacing['2'],
+    },
+    synopsisText: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.foreground,
+        lineHeight: (typography.body?.fontSize || 16) * 1.5,
+    },
+    // --- Estilos de Resenha do Usuário ---
+    userReviewBox: {
+        marginBottom: spacing['6'],
+        paddingBottom: spacing['4'],
+        borderBottomWidth: 1,
+        borderBottomColor: colors.border,
+    },
+    editReviewButton: {
+        marginTop: spacing['2'],
+        alignSelf: 'flex-start',
+    },
+    editReviewText: {
+        fontSize: typography.small?.fontSize || 14,
+        color: colors.primary,
+        fontWeight: '500',
+    },
+    // --- Estilos de Comentário da Comunidade ---
+    communityRatingBox: {
+        marginTop: spacing['4'],
+        paddingTop: spacing['4'],
+    },
+    communityReview: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        marginTop: spacing['4'],
+    },
+    avatar: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: colors.primary, 
+        marginRight: spacing['3'],
+    },
+    reviewUser: {
+        fontSize: typography.body?.fontSize || 16,
+        fontWeight: '600',
+        color: colors.foreground,
+    },
+    reviewDate: {
+        fontSize: typography.small?.fontSize || 12,
+        color: colors.mutedForeground,
+        marginBottom: spacing['1'],
+    },
+    reviewText: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.foreground,
+    },
+    // --- Estilos Comuns do Modal ---
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContainer: {
+        width: '90%',
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.xl || 20,
+        padding: spacing['6'],
+        ...shadows.lg,
+    },
+    closeModalButton: {
+        position: 'absolute',
+        top: spacing['4'],
+        right: spacing['4'],
+        zIndex: 10,
+        padding: spacing['2'],
+    },
+    modalTitle: {
+        fontSize: typography.h3?.fontSize || 24,
+        fontWeight: 'bold',
+        color: colors.foreground,
+        marginBottom: spacing['1'],
+        textAlign: 'center',
+    },
+    modalSubtitle: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.mutedForeground,
+        marginBottom: spacing['6'],
+        textAlign: 'center',
+    },
+    modalLabel: {
+        fontSize: typography.body?.fontSize || 16,
+        fontWeight: '600',
+        color: colors.foreground,
+        marginBottom: spacing['2'],
+    },
+    modalButtonContainer: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: spacing['3'],
+        marginTop: spacing['6'],
+    },
+    modalCancelButton: {
+        paddingVertical: spacing['3'],
+        paddingHorizontal: spacing['6'],
+        borderRadius: borderRadius.md || 8,
+        borderWidth: 1,
+        borderColor: colors.border,
+        alignItems: 'center',
+    },
+    modalCancelText: {
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.foreground,
+        fontWeight: '500',
+    },
+    modalSaveText: { 
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.primaryForeground,
+        fontWeight: '500',
+    },
+    modalSaveButton: { 
+        paddingVertical: spacing['3'],
+        paddingHorizontal: spacing['6'],
+        borderRadius: borderRadius.md || 8,
+        backgroundColor: colors.primary, 
+        alignItems: 'center',
+    },
+    // --- Estilos Específicos do Modal de Progresso ---
+    progressInputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: borderRadius.md || 8,
+        height: 50,
+        marginBottom: spacing['2'],
+    },
+    modalProgressInput: {
+        flex: 1,
+        paddingHorizontal: spacing['3'],
+        fontSize: typography.h3?.fontSize || 24,
+        fontWeight: 'bold',
+        color: colors.foreground,
+        textAlign: 'right',
+    },
+    spinnerIcon: {
+        height: '100%',
+        width: 40,
+        borderLeftWidth: 1,
+        borderColor: colors.border,
+        justifyContent: 'space-around',
+        paddingVertical: spacing['1'],
+    },
+    pagesTotalText: {
+        fontSize: typography.small?.fontSize || 14,
+        color: colors.mutedForeground,
+        marginBottom: spacing['2'],
+    },
+    // --- Estilos Específicos do Modal de Avaliação ---
+    modalReviewInput: {
+        minHeight: 80,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: borderRadius.md || 8,
+        padding: spacing['3'],
+        fontSize: typography.body?.fontSize || 16,
+        color: colors.foreground,
+        textAlignVertical: 'top', 
+        marginBottom: spacing['6'],
+    },
+    modalStarSelector: {
+        flexDirection: 'row',
+        marginBottom: spacing['6'],
+    },
 });
