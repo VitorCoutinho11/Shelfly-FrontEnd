@@ -11,18 +11,20 @@ import {
   ViewStyle,
   TextStyle,
   ImageStyle,
-  Alert 
+  Alert 
 } from 'react-native';
 
 import Feather from 'react-native-vector-icons/Feather';
 import { useState } from 'react';
-import EditProfileModal from '@/components/EditProfile'; 
+// Importação de componentes que você definiu em seu projeto (usando alias @)
+import EditProfileModal from '@/components/EditProfile'; 
 
 // 💡 CORREÇÃO 1: Corrigindo os caminhos de importação para incluir '/index'
-import NotificationsModal, { NotificationSettings } from '@/components/Notification'; 
+import NotificationsModal, { NotificationSettings } from '@/components/Notification'; 
 import PrivacyModal, { PrivacySettings } from '@/components/Privacy';
 
-import { useAuth as useAuthJS } from './context/AuthContext'; 
+// Importação do AuthContext original (usando alias ou caminho relativo)
+import { useAuth as useAuthJS } from './context/AuthContext'; 
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 // --- 💡 SIMULAÇÃO DE TIPOS DO THEME ---
@@ -107,7 +109,7 @@ interface AuthUser {
   name: string;
   email: string;
   avatarUrl?: string;
-  readingGoal?: number; 
+  readingGoal?: number; 
 }
 interface AuthContextData {
   user: AuthUser | null;
@@ -115,6 +117,7 @@ interface AuthContextData {
   updateUser: (newData: Partial<AuthUser>) => void;
   requestEmailChange: (newEmail: string) => Promise<void>;
 }
+// Cria um wrapper para usar o contexto JS de forma tipada
 const useAuth = (): AuthContextData => useAuthJS() as AuthContextData;
 
 type AppStackParamList = {
@@ -149,7 +152,7 @@ const MenuItem: React.FC<MenuItemProps> = ({
   icon, text, onPress, hasArrow = false, isDestructive = false
 }) => {
   const textColor = isDestructive ? theme.colors.destructive : theme.colors.foreground;
-  const iconColor = isDestructive ? theme.colors.destructive : theme.colors.primary; 
+  const iconColor = isDestructive ? theme.colors.destructive : theme.colors.primary; 
 
   return (
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
@@ -191,15 +194,16 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
     logout();
   };
 
-  // 💡 CORREÇÃO: Removido 'Notifications' e 'Privacy' de 'goTo'
+  // 💡 CORREÇÃO: Removido 'Notifications' e 'Privacy' de 'goTo'
   const goTo = (screen: 'MainTabs') => { // Você pode adicionar outras telas aqui se precisar
     navigation.navigate(screen);
   };
 
-  const handleSaveProfile = async (data: { name: string, email: string, avatarUrl: string, readingGoal: number }) => {
-    if (!user) return; 
+  // 💡 Adaptação da função de salvar para usar os tipos corretos
+  const handleSaveProfile = async (data: Partial<AuthUser>) => {
+    if (!user) return; 
 
-    if (data.email !== user.email) {
+    if (data.email && data.email !== user.email) {
       const { email, ...otherData } = data;
       updateUser(otherData);
       try {
@@ -213,28 +217,29 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
       }
     } else {
       updateUser(data);
+      Alert.alert("Sucesso", "Perfil atualizado!");
     }
-    
+    
     setModalVisible(false);
   };
 
   const handleSaveNotifications = (settings: NotificationSettings) => {
     setNotificationSettings(settings);
     console.log("Salvando configurações de notificação:", settings);
-    setNotificationsModalVisible(false); 
+    setNotificationsModalVisible(false); 
   };
 
   const handleSavePrivacy = (settings: PrivacySettings) => {
     setPrivacySettings(settings);
     console.log("Salvando configurações de privacidade:", settings);
-    setPrivacyModalVisible(false); 
+    setPrivacyModalVisible(false); 
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" backgroundColor={theme.colors.primary} />
-      
-      <ScrollView 
+      
+      <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
@@ -245,7 +250,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         </View>
 
         {/* 2. Card de Informações do Usuário (Flutuante e separado) */}
-        <View style={styles.profileCard}> 
+        <View style={styles.profileCard}> 
           <View style={styles.avatarWrapper}>
             <Image
               source={{ uri: user?.avatarUrl || 'https://i.pravatar.cc/150?img=12' }}
@@ -255,12 +260,12 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
               <Feather name="camera" size={16} color={theme.colors.primary} />
             </TouchableOpacity>
           </View>
-          
-          <Text style={styles.userName}>{user?.name || 'chatgpt'}</Text>
-          <Text style={styles.userEmail}>{user?.email || 'chatgpt@gmail.com'}</Text>
+          
+          <Text style={styles.userName}>{user?.name || 'Leitor'}</Text>
+          <Text style={styles.userEmail}>{user?.email || 'leitor@app.com'}</Text>
 
-          <TouchableOpacity 
-            style={styles.editButton} 
+          <TouchableOpacity 
+            style={styles.editButton} 
             onPress={() => setModalVisible(true)}
           >
             <Feather name="edit-3" size={16} color={theme.colors.primaryForeground} />
@@ -271,7 +276,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
         {/* 3. Card de Preferências de Leitura */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Preferências de Leitura</Text>
-          
+          
           <View style={styles.prefItem}>
             <View style={styles.prefItemText}>
               <Text style={styles.prefTitle}>Meta de Leitura Anual</Text>
@@ -287,6 +292,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           </View>
           <View style={styles.tagsContainer}>
             <GenreTag text="Ficção" />
+            <GenreTag text="Fantasia" />
           </View>
         </View>
 
@@ -297,13 +303,13 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             icon="bell"
             text="Notificações"
             hasArrow
-            onPress={() => setNotificationsModalVisible(true)} 
+            onPress={() => setNotificationsModalVisible(true)} 
           />
           <MenuItem
             icon="shield"
             text="Privacidade"
             hasArrow
-            onPress={() => setPrivacyModalVisible(true)} 
+            onPress={() => setPrivacyModalVisible(true)} 
           />
           <MenuItem
             icon="log-out"
@@ -312,30 +318,32 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
             onPress={handleLogout}
           />
         </View>
-        
+        
         <View style={{ height: theme.spacing[8] }} />
       </ScrollView>
 
+      {/* 💡 Adaptação do Modal para usar os tipos do AuthUser */}
       <EditProfileModal
         visible={isModalVisible}
         onClose={() => setModalVisible(false)}
         onSave={handleSaveProfile}
-        currentUser={user}
+        // O tipo de currentUser precisa ser o AuthUser para o modal funcionar
+        currentUser={user as any} 
       />
 
-      <NotificationsModal
-        visible={isNotificationsModalVisible}
-        onClose={() => setNotificationsModalVisible(false)}
-        onSave={handleSaveNotifications}
-        currentSettings={notificationSettings}
-      />
+      <NotificationsModal
+        visible={isNotificationsModalVisible}
+        onClose={() => setNotificationsModalVisible(false)}
+        onSave={handleSaveNotifications}
+        currentSettings={notificationSettings}
+      />
 
-      <PrivacyModal
-        visible={isPrivacyModalVisible}
-        onClose={() => setPrivacyModalVisible(false)}
-        onSave={handleSavePrivacy}
-        currentSettings={privacySettings}
-      />
+      <PrivacyModal
+        visible={isPrivacyModalVisible}
+        onClose={() => setPrivacyModalVisible(false)}
+        onSave={handleSavePrivacy}
+        currentSettings={privacySettings}
+      />
     </SafeAreaView>
   );
 }
@@ -360,7 +368,6 @@ type Styles = {
   prefItem: ViewStyle;
   prefItemText: ViewStyle;
   prefTitle: TextStyle;
-  // 💡 CORREÇÃO 2: Removido o 's' que estava quebrando o tipo
   prefSubtitle: TextStyle;
   prefValue: TextStyle;
   tagsContainer: ViewStyle;
@@ -375,19 +382,19 @@ type Styles = {
 const styles = StyleSheet.create<Styles>({
   safeArea: {
     flex: 1,
-    backgroundColor: theme.colors.background, 
+    backgroundColor: theme.colors.background, 
   },
   scrollContent: {
-    paddingBottom: theme.spacing[8], 
+    paddingBottom: theme.spacing['8'], 
   },
   headerBlock: {
     backgroundColor: theme.colors.primary,
-    padding: theme.spacing[6],
-    paddingBottom: theme.spacing[8], 
+    padding: theme.spacing['6'],
+    paddingBottom: theme.spacing['8'], 
     borderBottomLeftRadius: theme.borderRadius.xl,
     borderBottomRightRadius: theme.borderRadius.xl,
-    marginHorizontal: 0, 
-    marginBottom: theme.spacing[6], 
+    marginHorizontal: 0, 
+    marginBottom: theme.spacing['6'], 
   },
   headerTitle: {
     ...theme.typography.h1,
@@ -397,75 +404,71 @@ const styles = StyleSheet.create<Styles>({
     ...theme.typography.small,
     color: theme.colors.primaryForeground,
     opacity: 0.8,
-    marginTop: theme.spacing[1],
+    marginTop: theme.spacing['1'],
   },
   card: {
     backgroundColor: theme.colors.card,
     borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing[5],
-    marginBottom: theme.spacing[4],
+    padding: theme.spacing['5'],
+    marginBottom: theme.spacing['4'],
     ...theme.shadows.sm,
-    marginHorizontal: theme.spacing[4], 
+    marginHorizontal: theme.spacing['4'], 
   },
   profileCard: {
-    marginTop: - (96 / 2) - theme.spacing[6], 
+    marginTop: - (96 / 2) - theme.spacing['6'], 
     alignItems: 'center',
-    backgroundColor: theme.colors.card, 
+    backgroundColor: theme.colors.card, 
     borderRadius: theme.borderRadius.lg,
-    padding: theme.spacing[5],
-    marginBottom: theme.spacing[4],
+    padding: theme.spacing['5'],
+    marginBottom: theme.spacing['4'],
     ...theme.shadows.sm,
-    marginHorizontal: theme.spacing[4], 
-    zIndex: 1, 
+    marginHorizontal: theme.spacing['4'], 
+    zIndex: 1, 
   },
   cardTitle: {
     ...theme.typography.h3,
     color: theme.colors.foreground,
-    marginBottom: theme.spacing[3],
+    marginBottom: theme.spacing['3'],
   },
   avatarWrapper: {
     position: 'relative',
-    marginTop: - (96 / 2), 
-    marginBottom: theme.spacing[3],
-    zIndex: 2, 
+    marginTop: - (96 / 2), 
+    marginBottom: theme.spacing['3'],
+    zIndex: 2, 
   },
   avatar: {
     width: 96,
     height: 96,
     borderRadius: theme.borderRadius.full,
     borderWidth: 3,
-    borderColor: theme.colors.card, 
+    borderColor: theme.colors.card, 
   },
   cameraIcon: {
     position: 'absolute',
     bottom: 0,
     right: 0,
     backgroundColor: theme.colors.card,
-// 💡 CORREÇÃO 2: Removido 's'
     borderRadius: theme.borderRadius.full,
-    padding: theme.spacing[2],
+    padding: theme.spacing['2'],
     ...theme.shadows.sm,
-    zIndex: 3, 
+    zIndex: 3, 
   },
   userName: {
     ...theme.typography.h2,
     color: theme.colors.foreground,
-// 💡 CORREÇÃO 2: Removido 't'
   },
   userEmail: {
     ...theme.typography.small,
     color: theme.colors.mutedForeground,
-    marginBottom: theme.spacing[4],
-// 💡 CORREÇÃO 2: Removido 's'
+    marginBottom: theme.spacing['4'],
   },
   editButton: {
     flexDirection: 'row',
-// 💡 CORREÇÃO 2: Removido 'out:'
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing[3],
-    paddingHorizontal: theme.spacing[5],
+    paddingVertical: theme.spacing['3'],
+    paddingHorizontal: theme.spacing['5'],
     borderRadius: theme.borderRadius.lg,
     ...theme.shadows.sm,
   },
@@ -473,13 +476,13 @@ const styles = StyleSheet.create<Styles>({
     ...theme.typography.body,
     color: theme.colors.primaryForeground,
     fontWeight: '600',
-    marginLeft: theme.spacing[2],
+    marginLeft: theme.spacing['2'],
   },
   prefItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: theme.spacing[3],
+    paddingVertical: theme.spacing['3'],
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
   },
@@ -494,48 +497,44 @@ const styles = StyleSheet.create<Styles>({
   prefSubtitle: {
     ...theme.typography.small,
     color: theme.colors.mutedForeground,
-    marginTop: theme.spacing[1],
-// 💡 CORREÇÃO 2: Removido 's'
+    marginTop: theme.spacing['1'],
   },
   prefValue: {
     ...theme.typography.body,
     color: theme.colors.primary,
-// 💡 CORREÇÃO 2: Removido 'out:'
     fontWeight: '600',
-    marginLeft: theme.spacing[2],
+    marginLeft: theme.spacing['2'],
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: theme.spacing[2],
+    marginTop: theme.spacing['2'],
   },
   genreTag: {
     backgroundColor: theme.colors.secondaryLight,
-    paddingHorizontal: theme.spacing[3],
-    paddingVertical: theme.spacing[1],
+    paddingHorizontal: theme.spacing['3'],
+    paddingVertical: theme.spacing['1'],
     borderRadius: theme.borderRadius.lg,
-    marginRight: theme.spacing[2],
-    marginBottom: theme.spacing[2],
+    marginRight: theme.spacing['2'],
+    marginBottom: theme.spacing['2'],
   },
   genreTagText: {
     color: theme.colors.secondary,
     fontWeight: '600',
-// 💡 CORREÇÃO 2: Removido 'A'
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: theme.spacing[3],
+    paddingVertical: theme.spacing['3'],
   },
   menuIconContainer: {
     width: 32,
     alignItems: 'center',
-    marginRight: theme.spacing[3],
+    marginRight: theme.spacing['3'],
   },
   menuText: {
     ...theme.typography.body,
     flex: 1,
-// 💡 CORREÇÃO 2: Removido 'contentFetchId: ...'
     fontWeight: '500',
   },
 });
