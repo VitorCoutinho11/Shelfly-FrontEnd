@@ -11,15 +11,23 @@ import {
   ViewStyle, 
   TextStyle, 
   ImageStyle,
-  Animated 
+  Animated, 
+  ActivityIndicator,
+  Dimensions 
 } from 'react-native';
+
+// 💡 Importação do AsyncStorage
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 
 // 💡 Importando tipos de navegação
 import { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import Feather from 'react-native-vector-icons/Feather';
 
-// --- 💡 INÍCIO DA DEFINIÇÃO DE TIPOS PARA O THEME ---
+// ------------------------------------------
+// --- DEFINIÇÃO DE TIPOS E TEMA (MANTIDO) ---
+// ------------------------------------------
+
 interface ThemeColors {
   background: string;
   card: string;
@@ -74,10 +82,7 @@ interface AppTheme {
   shadows: ThemeShadows;
 }
 
-// --- FIM DA DEFINIÇÃO DE TIPOS PARA O THEME ---
-
-
-// --- 💡 SIMULAÇÃO DO THEME ---
+// --- SIMULAÇÃO DO THEME ---
 const Theme: AppTheme = {
   colors: {
     background: '#FAFAFA',
@@ -117,12 +122,11 @@ const Theme: AppTheme = {
   }
 };
 const { colors, spacing, typography, borderRadius, shadows } = Theme;
-// --- FIM DA SIMULAÇÃO DO THEME ---
 
+// ------------------------------------------
+// --- DEFINIÇÃO DE TIPOS DE DADOS PARA ASYNC STORAGE ---
+// ------------------------------------------
 
-// --- 💡 DEFINIÇÃO DE TIPOS DE DADOS E PROPS ---
-
-// 1. Tipo para um item de estatística
 interface Stat {
   icon: string; 
   value: number;
@@ -131,48 +135,40 @@ interface Stat {
   iconColor: string;
 }
 
-// 2. Tipo para o gênero mais lido
 interface MostReadGenre {
   name: string;
   count: number;
 }
 
-// 3. Tipo para os dados de leitura mensal
 interface MonthlyData {
-    month: string;
-    booksRead: number;
+    month: string;
+    booksRead: number;
 }
 
-// 4. Tipo para o objeto userStats
 interface UserStats {
   userName: string;
   avatarUrl: string;
   stats: Stat[];
   mostReadGenre: MostReadGenre;
   readingHistoryData: MonthlyData[]; 
-  readingGoal: number; 
+  readingGoal: number; 
 }
 
-// 5. Tipo para as props do HomeScreen
 interface HomeScreenProps {
   navigation: NavigationProp<ParamListBase>;
 }
 
-// 6. Tipo para as props da barra
 interface ChartBarProps {
-    month: string;
-    booksRead: number;
-    maxBooks: number;
-    barHeight: number;
+    month: string;
+    booksRead: number;
+    maxBooks: number;
+    barHeight: number;
 }
 
-// REMOVIDO: type StatCardProps = Stat; // <-- Esta linha causava o erro
-// --- FIM DOS TIPOS ---
 
-
-// --- MOCK de Dados (Tipado) ---
-const userStats: UserStats = {
-    userName: "chatgpt!",
+// --- MOCK INICIAL (Fallback) ---
+const initialUserStats: UserStats = {
+    userName: "Usuário Shelfly",
     avatarUrl: "https://i.pravatar.cc/150?img=47", 
     stats: [
         { icon: 'book-open', value: 5, label: "Total de Livros", iconBg: '#d7e4fd', iconColor: '#1D4ED8' },
@@ -182,19 +178,36 @@ const userStats: UserStats = {
     ],
     mostReadGenre: { name: 'Fantasia', count: 1 },
     readingHistoryData: [
-      { month: 'jun.', booksRead: 2 },
-      { month: 'jul.', booksRead: 4 },
-      { month: 'ago.', booksRead: 1 },
-      { month: 'set.', booksRead: 5 },
-      { month: 'out.', booksRead: 3 },
-      { month: 'nov.', booksRead: 6 },
-    ],
-    readingGoal: 6, 
+      { month: 'jun.', booksRead: 2 },
+      { month: 'jul.', booksRead: 4 },
+      { month: 'ago.', booksRead: 1 },
+      { month: 'set.', booksRead: 5 },
+      { month: 'out.', booksRead: 3 },
+      { month: 'nov.', booksRead: 6 },
+    ],
+    readingGoal: 6, 
 };
 
+// --- CHAVE DE ARMAZENAMENTO ---
+const STORAGE_KEY = '@UserStats';
 
-// 💡 Componente de Cartão de Estatística (Tipado com Stat)
-// StatCard: React.FC<StatCardProps> foi alterado para StatCard: React.FC<Stat>
+/**
+ * Função utilitária para salvar os dados no AsyncStorage.
+ */
+export const saveUserStats = async (stats: UserStats) => {
+  try {
+    const jsonValue = JSON.stringify(stats);
+    await AsyncStorage.setItem(STORAGE_KEY, jsonValue);
+  } catch (e) {
+    console.error('Erro ao salvar os dados no AsyncStorage:', e);
+  }
+};
+
+// ------------------------------------------
+// --- COMPONENTES ---
+// ------------------------------------------
+
+// 💡 Componente de Cartão de Estatística
 const StatCard: React.FC<Stat> = ({ icon, value, label, iconBg, iconColor }) => (
     <View style={styles.statCard}>
         <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
@@ -205,133 +218,160 @@ const StatCard: React.FC<Stat> = ({ icon, value, label, iconBg, iconColor }) => 
     </View>
 );
 
-// ------------------------------------------
-// 💡 NOVO COMPONENTE: ChartBar (Barra Animada)
-// ------------------------------------------
+// 💡 Componente ChartBar (Barra Animada)
 const ChartBar: React.FC<ChartBarProps> = ({ month, booksRead, maxBooks, barHeight }) => {
-    // Valor animado que vai de 0 a 100 (altura em porcentagem)
-    const [animatedHeight] = useState(new Animated.Value(0)); 
-    const targetHeightPercentage = maxBooks > 0 ? (booksRead / maxBooks) * 100 : 0;
-    
-    // Estado para controlar o tooltip (livros lidos)
-    const [isTooltipVisible, setIsTooltipVisible] = useState(false);
+    const [animatedHeight] = useState(new Animated.Value(0)); 
+    // Usa displayMax (que é a meta de leitura ou 4) para normalização da altura.
+    const targetHeightPercentage = maxBooks > 0 ? (booksRead / maxBooks) * 100 : 0; 
+    const [isTooltipVisible, setIsTooltipVisible] = useState(false);
 
-    useEffect(() => {
-        // Inicia a animação da barra no carregamento
-        if (targetHeightPercentage > 0) {
-            Animated.timing(animatedHeight, {
-                toValue: targetHeightPercentage,
-                duration: 800, // 0.8 segundos de animação suave
-                useNativeDriver: false, 
-            }).start();
-        }
-    }, [targetHeightPercentage]);
+    useEffect(() => {
+        if (targetHeightPercentage > 0) {
+            Animated.timing(animatedHeight, {
+                toValue: targetHeightPercentage,
+                duration: 800, 
+                useNativeDriver: false, 
+            }).start();
+        }
+    }, [targetHeightPercentage]);
 
-    // Calcula a altura da View (em pixels) baseada na porcentagem e na altura total do gráfico
-    const animatedBarPixelHeight = animatedHeight.interpolate({
-        inputRange: [0, 100],
-        outputRange: [0, barHeight], 
-    });
+    const animatedBarPixelHeight = animatedHeight.interpolate({
+        inputRange: [0, 100],
+        outputRange: [0, barHeight], 
+    });
 
-    return (
-        <TouchableOpacity 
-            style={styles.barWrapper}
-            onPressIn={() => setIsTooltipVisible(true)}
-            onPressOut={() => setIsTooltipVisible(false)}
-            activeOpacity={0.8}
-        >
-            {/* Tooltip (Mostra a quantidade de livros) */}
-            {isTooltipVisible && (
-                <View style={styles.tooltip}>
-                    <Text style={styles.tooltipTextMonth}>{month}</Text>
-                    <Text style={styles.tooltipTextValue}>Livros: {booksRead}</Text>
-                    {/* Triângulo apontando para a barra */}
-                    <View style={styles.tooltipArrow} />
-                </View>
-            )}
+    return (
+        <TouchableOpacity 
+            style={styles.barWrapper}
+            onPressIn={() => setIsTooltipVisible(true)}
+            onPressOut={() => setIsTooltipVisible(false)}
+            activeOpacity={0.8}
+        >
+            {isTooltipVisible && (
+                <View style={styles.tooltip}>
+                    <Text style={styles.tooltipTextMonth}>{month}</Text>
+                    <Text style={styles.tooltipTextValue}>Livros: {booksRead}</Text>
+                    <View style={styles.tooltipArrow} />
+                </View>
+            )}
 
-            {/* O container da barra. Usamos justifyContent: 'flex-end' para a barra crescer de baixo para cima. */}
-            <View style={[styles.barContainer, { height: barHeight }]}>
-                <Animated.View 
-                    style={[
-                        styles.bar, 
-                        { 
-                            height: animatedBarPixelHeight, // Altura animada em pixels
-                            backgroundColor: booksRead > 0 ? colors.primary : colors.mutedForeground, // Cor verde se leu, cinza se 0
-                        }
-                    ]} 
-                />
-            </View>
+            <View style={[styles.barContainer, { height: barHeight }]}>
+                <Animated.View 
+                    style={[
+                        styles.bar, 
+                        { 
+                            height: animatedBarPixelHeight,
+                            backgroundColor: booksRead > 0 ? colors.primary : colors.mutedForeground,
+                        }
+                    ]} 
+                />
+            </View>
 
-            {/* Label do Mês */}
-            <Text style={[typography.xs, styles.chartLabelMonth]}>{month}</Text>
-        </TouchableOpacity>
-    );
+            <Text style={[typography.xs, styles.chartLabelMonth]}>{month}</Text>
+        </TouchableOpacity>
+    );
 };
-// ------------------------------------------
-// 💡 FIM DO NOVO COMPONENTE: ChartBar
-// ------------------------------------------
 
 
 // 💡 Componente Principal: ReadingHistoryChart (Gráfico com barras)
-const ReadingHistoryChart = () => {
-    // Altura fixa da área do gráfico para cálculo preciso (em pixels)
-    const CHART_AREA_HEIGHT = 150; 
-    const maxBooks = userStats.readingGoal; // Meta de leitura como valor máximo
+const ReadingHistoryChart: React.FC<{ userStats: UserStats }> = ({ userStats }) => {
+    const CHART_AREA_HEIGHT = 150; 
+    // O valor máximo é a meta de leitura para que 100% da barra represente a meta.
+    const maxBooks = userStats.readingGoal; 
 
-    // Labels do Eixo Y (Máximo arredondado para cima para ser divisível por 4, ou mínimo 4)
-    const displayMax = Math.max(4, Math.ceil(maxBooks / 4) * 4);
-    const yAxisLabels = [displayMax, (displayMax * 3) / 4, displayMax / 2, displayMax / 4, 0];
-    
-    // O valor de um "livro" em pixels, baseado no displayMax e altura total
-    // const pixelsPerUnit = CHART_AREA_HEIGHT / displayMax; // Variável não usada, removida
+    // Labels do Eixo Y (Máximo arredondado para cima para ser divisível por 4, ou mínimo 4)
+    const displayMax = Math.max(4, Math.ceil(maxBooks / 4) * 4);
+    const yAxisLabels = [displayMax, (displayMax * 3) / 4, displayMax / 2, displayMax / 4, 0];
+    
 
-    return (
-        <View style={styles.chartContainer}>
-            {/* 1. Eixo Y (Labels) */}
-            <View style={styles.yAxisLabels}>
-                {yAxisLabels.map((label, index) => (
-                    <Text key={index} style={[typography.xs, styles.chartLabelY]}>{label}</Text>
-                ))}
-            </View>
+    return (
+        <View style={styles.chartContainer}>
+            {/* 1. Eixo Y (Labels) */}
+            <View style={styles.yAxisLabels}>
+                {yAxisLabels.map((label, index) => (
+                    <Text key={index} style={[typography.xs, styles.chartLabelY]}>{label}</Text>
+                ))}
+            </View>
 
-            {/* 2. Área do Gráfico e Barras */}
-            <View style={styles.chartArea}>
-                {/* Linhas do Grid Horizontais */}
-                {/* Começamos do segundo label (topo) até o penúltimo (base) */}
-                {yAxisLabels.slice(1, -1).map((_, index) => (
-                    <View 
-                        key={index} 
-                        style={[
-                            styles.chartGridLine, 
-                            { 
-                                // O grid deve ser posicionado de cima para baixo
-                                top: (index + 1) * (CHART_AREA_HEIGHT / (yAxisLabels.length - 1))
-                            }
-                        ]}
-                    />
-                ))}
+            {/* 2. Área do Gráfico e Barras */}
+            <View style={styles.chartArea}>
+                {/* Linhas do Grid Horizontais */}
+                {yAxisLabels.slice(1, -1).map((_, index) => (
+                    <View 
+                        key={index} 
+                        style={[
+                            styles.chartGridLine, 
+                            { 
+                                top: (index + 1) * (CHART_AREA_HEIGHT / (yAxisLabels.length - 1))
+                            }
+                        ]}
+                    />
+                ))}
 
-                {/* Container das Barras (usa a altura total para normalização) */}
-                <View style={[styles.barsContainer, { height: CHART_AREA_HEIGHT }]}>
-                    {userStats.readingHistoryData.map((dataItem, index) => (
-                        <ChartBar 
-                            key={index}
-                            month={dataItem.month} 
-                            booksRead={dataItem.booksRead} 
-                            maxBooks={displayMax}
-                            barHeight={CHART_AREA_HEIGHT} // Passamos a altura total para o cálculo da animação
-                        />
-                    ))}
-                </View>
-            </View>
-        </View>
-    );
+                {/* Container das Barras */}
+                <View style={[styles.barsContainer, { height: CHART_AREA_HEIGHT }]}>
+                    {userStats.readingHistoryData.map((dataItem, index) => (
+                        <ChartBar 
+                            key={index}
+                            month={dataItem.month} 
+                            booksRead={dataItem.booksRead} 
+                            maxBooks={displayMax} // Usa o valor máximo calculado para a proporção
+                            barHeight={CHART_AREA_HEIGHT}
+                        />
+                    ))}
+                </View>
+            </View>
+        </View>
+    );
 };
 
 
-// 💡 Componente Principal (Tipado)
+// ------------------------------------------
+// --- COMPONENTE PRINCIPAL (HomeScreen) ---
+// ------------------------------------------
+
 export default function HomeScreen({ navigation }: HomeScreenProps) { 
+    const [stats, setStats] = useState<UserStats | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    /**
+     * Função para carregar os dados do AsyncStorage.
+     */
+    const fetchUserStats = async () => {
+        try {
+            const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
+            
+            if (jsonValue != null) {
+                setStats(JSON.parse(jsonValue));
+            } else {
+                // Se não houver dados, salva o mock inicial e o usa
+                await saveUserStats(initialUserStats);
+                setStats(initialUserStats);
+            }
+        } catch (e) {
+            console.error('Erro ao ler ou inicializar dados do AsyncStorage:', e);
+            // Em caso de falha, usa o mock para garantir que a tela carregue
+            setStats(initialUserStats); 
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchUserStats();
+    }, []);
+
+    // Tela de Carregamento enquanto espera o AsyncStorage
+    if (loading || !stats) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={colors.primary} />
+                <Text style={styles.loadingText}>Carregando estatísticas...</Text>
+            </View>
+        );
+    }
+
+    // Renderização Principal (usando os dados carregados de 'stats')
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" backgroundColor={colors.primary} />
@@ -339,11 +379,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             {/* Header */}
             <View style={styles.header}>
                 <Image 
-                    source={{ uri: userStats.avatarUrl }} 
+                    source={{ uri: stats.avatarUrl }} 
                     style={styles.avatar} 
                 />
                 <View>
-                    <Text style={styles.headerWelcome}>Olá, {userStats.userName}</Text>
+                    <Text style={styles.headerWelcome}>Olá, {stats.userName}</Text>
                     <Text style={styles.headerSubtitle}>Bem-vindo de volta</Text>
                 </View>
             </View>
@@ -352,7 +392,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 
                 {/* Estatísticas (Grid) */}
                 <View style={styles.statsGrid}>
-                    {userStats.stats.map((stat: Stat) => ( 
+                    {stats.stats.map((stat: Stat) => ( 
                         <StatCard key={stat.label} {...stat} />
                     ))}
                 </View>
@@ -361,8 +401,8 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <View style={styles.sectionContainer}>
                     <Text style={[typography.label, styles.sectionTitle]}>Gênero Mais Lido</Text>
                     <View style={styles.genreCard}>
-                        <Text style={[typography.body, styles.genreName]}>{userStats.mostReadGenre.name}</Text>
-                        <Text style={[typography.small, styles.genreCount]}>{userStats.mostReadGenre.count} livro</Text>
+                        <Text style={[typography.body, styles.genreName]}>{stats.mostReadGenre.name}</Text>
+                        <Text style={[typography.small, styles.genreCount]}>{stats.mostReadGenre.count} livro</Text>
                     </View>
                 </View>
 
@@ -370,18 +410,20 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
                 <View style={styles.sectionContainer}>
                     <Text style={[typography.label, styles.sectionTitle]}>Histórico de Leituras</Text>
                     <View style={styles.chartCard}>
-                        <ReadingHistoryChart /> 
+                        <ReadingHistoryChart userStats={stats} /> 
                     </View>
                 </View>
 
-                {/* Espaço no final */}
                 <View style={{ height: spacing[10] }} /> 
             </ScrollView>
         </SafeAreaView>
     );
 }
 
-// --- Tipagem e Estilos do Componente ---
+// ------------------------------------------
+// --- DEFINIÇÃO DOS ESTILOS (TypeScript Corrigido) ---
+// ------------------------------------------
+// A definição de tipo Styles deve vir antes de StyleSheet.create
 type Styles = {
   safeArea: ViewStyle;
   header: ViewStyle;
@@ -400,21 +442,22 @@ type Styles = {
   genreName: TextStyle;
   genreCount: TextStyle;
   chartCard: ViewStyle;
-  // NOVOS ESTILOS para o Gráfico
-  chartContainer: ViewStyle;
-  yAxisLabels: ViewStyle;
-  chartLabelY: TextStyle;
-  chartArea: ViewStyle;
-  barsContainer: ViewStyle;
-  chartGridLine: ViewStyle;
-  barWrapper: ViewStyle;
-  barContainer: ViewStyle;
-  bar: ViewStyle;
-  chartLabelMonth: TextStyle;
-  tooltip: ViewStyle;
-  tooltipTextMonth: TextStyle;
-  tooltipTextValue: TextStyle;
-  tooltipArrow: ViewStyle;
+  chartContainer: ViewStyle;
+  yAxisLabels: ViewStyle;
+  chartLabelY: TextStyle;
+  chartArea: ViewStyle;
+  barsContainer: ViewStyle;
+  chartGridLine: ViewStyle;
+  barWrapper: ViewStyle;
+  barContainer: ViewStyle;
+  bar: ViewStyle;
+  chartLabelMonth: TextStyle;
+  tooltip: ViewStyle;
+  tooltipTextMonth: TextStyle;
+  tooltipTextValue: TextStyle;
+  tooltipArrow: ViewStyle;
+  loadingContainer: ViewStyle; // Novo para a tela de carregamento
+  loadingText: TextStyle; // Novo para a tela de carregamento
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -514,101 +557,108 @@ const styles = StyleSheet.create<Styles>({
         padding: spacing[4],
         ...shadows.sm,
     },
-
-    // --------------------------------
-    // ESTILOS DO GRÁFICO DE BARRAS
-    // --------------------------------
-    chartContainer: {
-        flexDirection: 'row',
-        paddingRight: spacing[2],
-        paddingTop: spacing[3],
-        height: 190, // Altura total do container (eixo Y + barras)
-    },
-    yAxisLabels: {
-        width: 30,
-        justifyContent: 'space-between',
-        paddingBottom: spacing[4], // Espaço para o 0
-    },
-    chartLabelY: {
-        ...typography.xs,
-        color: colors.mutedForeground,
-        textAlign: 'right',
-    },
-    chartArea: {
-        flex: 1,
-        position: 'relative',
-        borderBottomWidth: StyleSheet.hairlineWidth, // Eixo X
-        borderColor: colors.border,
-    },
-    chartGridLine: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        height: StyleSheet.hairlineWidth,
-        backgroundColor: colors.border,
-    },
-    barsContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-around',
-        alignItems: 'flex-end', // Alinha as barras na parte inferior
-        position: 'absolute',
-        top: 0,
-        bottom: 0,
-        left: 0,
-        right: 0,
-    },
-    barWrapper: {
-        alignItems: 'center',
-        width: 40, // Largura total da coluna da barra
-        paddingBottom: spacing[1],
-    },
-    barContainer: {
-        width: 20, // Largura da barra animada
-        alignItems: 'center',
-        justifyContent: 'flex-end', // Garante que a barra cresça de baixo para cima
-    },
-    bar: {
-        width: '100%',
-        borderRadius: borderRadius.sm,
-    },
-    chartLabelMonth: {
-        ...typography.xs,
-        color: colors.mutedForeground,
-        marginTop: spacing[1],
-    },
-    tooltip: {
-        position: 'absolute',
-        bottom: '100%',
-        marginBottom: 10,
-        backgroundColor: colors.card,
-        borderRadius: borderRadius.sm,
-        paddingHorizontal: spacing[2],
-        paddingVertical: spacing[1],
-        ...shadows.sm,
-        zIndex: 10,
-        alignItems: 'center',
-    },
-    tooltipTextMonth: {
-        ...typography.xs,
-        fontWeight: 'bold',
-        color: colors.foreground,
-    },
-    tooltipTextValue: {
-        ...typography.xs,
-        color: colors.mutedForeground,
-    },
-    tooltipArrow: {
-        position: 'absolute',
-        bottom: -6, // Meio triângulo
-        width: 0,
-        height: 0,
-        backgroundColor: 'transparent',
-        borderStyle: 'solid',
-        borderLeftWidth: 6,
-        borderRightWidth: 6,
-        borderTopWidth: 6,
-        borderLeftColor: 'transparent',
-        borderRightColor: 'transparent',
-        borderTopColor: colors.card,
-    }
+    chartContainer: {
+        flexDirection: 'row',
+        paddingRight: spacing[2],
+        paddingTop: spacing[3],
+        height: 190,
+    },
+    yAxisLabels: {
+        width: 30,
+        justifyContent: 'space-between',
+        paddingBottom: spacing[4],
+    },
+    chartLabelY: {
+        ...typography.xs,
+        color: colors.mutedForeground,
+        textAlign: 'right',
+    },
+    chartArea: {
+        flex: 1,
+        position: 'relative',
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderColor: colors.border,
+    },
+    chartGridLine: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: StyleSheet.hairlineWidth,
+        backgroundColor: colors.border,
+    },
+    barsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'flex-end',
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        left: 0,
+        right: 0,
+    },
+    barWrapper: {
+        alignItems: 'center',
+        width: 40,
+        paddingBottom: spacing[1],
+    },
+    barContainer: {
+        width: 20,
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+    },
+    bar: {
+        width: '100%',
+        borderRadius: borderRadius.sm,
+    },
+    chartLabelMonth: {
+        ...typography.xs,
+        color: colors.mutedForeground,
+        marginTop: spacing[1],
+    },
+    tooltip: {
+        position: 'absolute',
+        bottom: '100%',
+        marginBottom: 10,
+        backgroundColor: colors.card,
+        borderRadius: borderRadius.sm,
+        paddingHorizontal: spacing[2],
+        paddingVertical: spacing[1],
+        ...shadows.sm,
+        zIndex: 10,
+        alignItems: 'center',
+    },
+    tooltipTextMonth: {
+        ...typography.xs,
+        fontWeight: 'bold',
+        color: colors.foreground,
+    },
+    tooltipTextValue: {
+        ...typography.xs,
+        color: colors.mutedForeground,
+    },
+    tooltipArrow: {
+        position: 'absolute',
+        bottom: -6,
+        width: 0,
+        height: 0,
+        backgroundColor: 'transparent',
+        borderStyle: 'solid',
+        borderLeftWidth: 6,
+        borderRightWidth: 6,
+        borderTopWidth: 6,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderTopColor: colors.card,
+    },
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: colors.background,
+    },
+    loadingText: {
+        ...typography.body,
+        color: colors.mutedForeground,
+        marginTop: spacing[3],
+    }
 });
