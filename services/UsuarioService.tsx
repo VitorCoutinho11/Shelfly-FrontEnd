@@ -1,97 +1,61 @@
-import api from "./api"; // Importa a instância Axios configurada
+import api from './api';
+// Importe as interfaces sem o prefixo 'I'
+import { UsuarioResponse } from '../interfaces/usuario/response'; 
+import { UsuarioRequest } from '../interfaces/usuario/request'; 
 
-// -----------------------------------------------------------
-// 💡 TIPOS DE DADOS
-// -----------------------------------------------------------
+const BASE_PATH = '/usuario'; 
 
-// Dados mínimos necessários para atualizar um perfil (Requisição - DTORequest)
-export interface UsuarioDTORequest {
-    nome?: string;
-    email?: string;
-    senha?: string;
-    avatarUrl?: string; 
-}
-
-// Dados completos retornados pela API (Resposta - DTOResponse)
-export interface UsuarioDTOResponse {
-    id: number;
-    nome: string;
-    email: string;
-    dataCadastro: string; 
-    // Adicione qualquer outro campo que vem no DTO de Resposta (ex: lista de amigos, etc.)
-}
-
-
-// -----------------------------------------------------------
-// 💡 FUNÇÕES DO SERVICE (Usando Axios)
-// -----------------------------------------------------------
-
-const BASE_PATH = '/usuarios'; // O Controller Spring usa @RequestMapping("/api/usuarios"), 
-                              // mas como o apiClient já tem '/api' na baseURL, usamos só '/usuarios'
-
-/**
- * Endpoint 1.0: Ver o perfil público de OUTRO usuário.
- * GET /api/usuarios/{usuarioId}
- * @param usuarioId O ID do usuário a ser buscado.
- * @returns Os dados públicos do usuário.
- */
-export async function verPerfilPublico(usuarioId: number): Promise<UsuarioDTOResponse> {
-    const endpoint = `${BASE_PATH}/${usuarioId}`;
-    // Usamos .get<T>(endpoint) para tipar a resposta
-    const response = await api.get<UsuarioDTOResponse>(endpoint); 
-    return response.data; // O Axios retorna o payload dentro da propriedade 'data'
-}
-
-/**
- * Endpoint 1.1: ATUALIZAR O PRÓPRIO PERFIL.
- * PUT /api/usuarios/me
- * @param dados Os dados do perfil a serem atualizados.
- * @returns O perfil atualizado.
- */
-export async function atualizarMeuPerfil(dados: UsuarioDTORequest): Promise<UsuarioDTOResponse> {
-    const endpoint = `${BASE_PATH}/me`;
-    // Usamos .put<T>(endpoint, body)
-    const response = await api.put<UsuarioDTOResponse>(endpoint, dados);
+export const UsuarioService = {
+  
+  /**
+   * GET /api/usuario/listar
+   * Espera uma LISTA (array) de UsuarioResponse
+   * @returns Promise<UsuarioResponse[]>
+   */
+  listarTodos: async () => {
+    // Tipando o retorno com UsuarioResponse[]
+    const response = await api.get<UsuarioResponse[]>(`${BASE_PATH}/listar`); 
     return response.data;
-}
+  },
 
-// -----------------------------------------------------------
-// 💡 FUNÇÕES ADMIN 
-// -----------------------------------------------------------
-
-/**
- * Endpoint 2.0: LISTAR TODOS OS USUÁRIOS.
- * GET /api/usuarios
- * @returns Uma lista de todos os usuários.
- */
-export async function listarTodosUsuarios(): Promise<UsuarioDTOResponse[]> {
-    const endpoint = BASE_PATH;
-    // Usamos .get<T[]>(endpoint)
-    const response = await api.get<UsuarioDTOResponse[]>(endpoint);
+  /**
+   * GET /api/usuario/listar/{usuarioId}
+   * Espera um único UsuarioResponse
+   * @param {number} usuarioId 
+   * @returns Promise<UsuarioResponse>
+   */
+  listarPorId: async (usuarioId: number) => {
+    const response = await api.get<UsuarioResponse>(`${BASE_PATH}/listar/${usuarioId}`);
     return response.data;
-}
+  },
 
-/**
- * Endpoint 2.1: ATUALIZAR UM USUÁRIO ESPECÍFICO POR ID (Uso Admin).
- * PUT /api/usuarios/{usuarioId}
- * @param usuarioId O ID do usuário a ser atualizado.
- * @param dados Os dados do usuário a serem atualizados.
- * @returns O perfil do usuário atualizado.
- */
-export async function atualizarUsuario(usuarioId: number, dados: UsuarioDTORequest): Promise<UsuarioDTOResponse> {
-    const endpoint = `${BASE_PATH}/${usuarioId}`;
-    const response = await api.put<UsuarioDTOResponse>(endpoint, dados);
+  /**
+   * POST /api/usuario/criar
+   * @param {UsuarioDTORequest} dadosUsuario 
+   * @returns Promise<UsuarioResponse>
+   */
+  criar: async (dadosUsuario: UsuarioRequest) => {
+    const response = await api.post<UsuarioResponse>(`${BASE_PATH}/criar`, dadosUsuario);
     return response.data;
-}
+  },
 
-/**
- * Endpoint 2.2: APAGAR UM USUÁRIO.
- * DELETE /api/usuarios/{usuarioId}
- * @param usuarioId O ID do usuário a ser apagado.
- * @returns Void (sem conteúdo de retorno).
- */
-export async function apagarUsuario(usuarioId: number): Promise<void> {
-    const endpoint = `${BASE_PATH}/${usuarioId}`;
-    // Usamos .delete<void>(endpoint). O Axios não retorna 'data' para 204 No Content.
-    await api.delete<void>(endpoint); 
-}
+  /**
+   * PUT /api/usuario/atualizar/{usuarioId}
+   * @param {number} usuarioId 
+   * @param {UsuarioDTORequest} novosDados 
+   * @returns Promise<UsuarioResponse>
+   */
+  atualizar: async (usuarioId: number, novosDados: UsuarioRequest) => {
+    const response = await api.put<UsuarioResponse>(`${BASE_PATH}/atualizar/${usuarioId}`, novosDados);
+    return response.data;
+  },
+
+  /**
+   * DELETE /api/usuario/apagar/{usuarioId}
+   * @param {number} usuarioId 
+   * @returns Promise<void>
+   */
+  apagar: async (usuarioId: number) => {
+    return api.delete(`${BASE_PATH}/apagar/${usuarioId}`);
+  }
+};
