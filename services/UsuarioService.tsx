@@ -3,7 +3,7 @@ import api from './api';
 import { UsuarioResponse } from '../interfaces/usuario/response'; 
 import { UsuarioRequest } from '../interfaces/usuario/request'; 
 
-const BASE_PATH = '/usuario'; 
+const BASE_PATH = 'http://academico3.rj.senac.br/shelfly/api';
 
 export const UsuarioService = {
   

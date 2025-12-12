@@ -4,7 +4,7 @@ import { AvaliacaoResponse } from '../interfaces/avaliacao/response';
 import { AvaliacaoRequest } from '../interfaces/avaliacao/request'; 
 
 // Caminho base definido no @RequestMapping("api/avaliacao")
-const BASE_PATH = '/avaliacao'; 
+const BASE_PATH = 'http://academico3.rj.senac.br/shelfly/api'; 
 
 // ----------------------------------------------------------------------------------------------
 // --- Serviços de Avaliação (CRUD) com Axios ---

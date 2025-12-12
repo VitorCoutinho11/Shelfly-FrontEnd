@@ -3,12 +3,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 1. Configurações Base
 // 🚨 MANTEMOS A URL BASE FORA DA INSTÂNCIA AXIOS, mas a definimos como constante
-const API_BASE_URL = 'http://academico3.rj.senac.br/shelfly/api'; 
+const API_BASE_URL = 'http://academico3.rj.senac.br/shelfly';
 const AUTH_TOKEN_KEY = 'authToken'; 
 
 // 2. Criação da Instância do Axios
-// 🚨 REMOVEMOS A PROPRIEDADE 'baseURL' AQUI
+
 const api: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -16,6 +17,7 @@ const api: AxiosInstance = axios.create({
 });
 
 export const publicApi: AxiosInstance = axios.create({
+  baseURL: API_BASE_URL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

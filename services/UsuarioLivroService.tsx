@@ -4,7 +4,7 @@ import { UsuarioLivroResponse } from '../interfaces/usuarioLivro/response';
 import { UsuarioLivroRequest } from '../interfaces/usuarioLivro/request'; 
 
 // Caminho base definido no @RequestMapping("api/usuarios-livros")
-const BASE_PATH = '/usuarios-livros'; 
+const BASE_PATH = 'http://academico3.rj.senac.br/shelfly/api';
 
 // ----------------------------------------------------------------------------------------------
 // --- Serviços de Associação Usuário-Livro (CRUD) com Axios ---

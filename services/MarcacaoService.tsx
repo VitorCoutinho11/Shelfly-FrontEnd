@@ -4,7 +4,7 @@ import { MarcacaoResponse } from '../interfaces/marcacao/response';
 import { MarcacaoRequest } from '../interfaces/marcacao/request'; 
 
 // Caminho base definido no @RequestMapping("api/marcacao")
-const BASE_PATH = '/marcacao'; 
+const BASE_PATH = 'http://academico3.rj.senac.br/shelfly/api'; 
 
 // ----------------------------------------------------------------------------------------------
 // --- Serviços de Marcação (CRUD) com Axios ---

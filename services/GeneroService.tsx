@@ -4,7 +4,7 @@ import { GeneroResponse } from '../interfaces/genero/response';
 import { GeneroRequest } from '../interfaces/genero/request'; 
 
 // Caminho base definido no @RequestMapping("api/genero")
-const BASE_PATH = '/genero'; 
+const BASE_PATH = 'http://academico3.rj.senac.br/shelfly/api'; 
 
 // ----------------------------------------------------------------------------------------------
 // --- Serviços de Gênero (CRUD) com Axios ---
