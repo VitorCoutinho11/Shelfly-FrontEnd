@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // 1. Configurações Base
 // 🚨 MANTEMOS A URL BASE FORA DA INSTÂNCIA AXIOS, mas a definimos como constante
-const API_BASE_URL = 'http://192.168.1.242:8411'; 
+const API_BASE_URL = 'http://academico3.rj.senac.br/shelfly/api'; 
 const AUTH_TOKEN_KEY = 'authToken'; 
 
 // 2. Criação da Instância do Axios
