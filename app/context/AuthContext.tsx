@@ -161,9 +161,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
             
             // 1. CHAMADA 1: PEGAR SOMENTE O TOKEN
             // 🚨 CORREÇÃO 2: Usa publicApi para o Login (Não envia tokens antigos/nulos)
-            const responseToken: AxiosResponse<AuthTokenResponse> = await publicApi.post(
-                AUTH_LOGIN_PATH, credentials
-            );
+            const responseToken: AxiosResponse<AuthTokenResponse> = await publicApi.post(AUTH_LOGIN_PATH, credentials);
             
             const { token } = responseToken.data;
             await AsyncStorage.setItem(TOKEN_KEY, token); 
