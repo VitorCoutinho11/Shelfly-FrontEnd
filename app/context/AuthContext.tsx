@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Alert, Text, View, ActivityIndicator, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-// 🚨 CORREÇÃO 1: Importa 'publicApi' para uso na rota de login sem token
 import api, { publicApi, API_BASE_URL } from '@/services/api'; 
 import { AxiosResponse } from 'axios'; 
 
 // ----------------------------------------------------------------------
-// 1. Tipos e Interfaces (Ajustadas para ShelflyBackEnd)
+// 1. Tipos e Interfaces (AJUSTADO)
 // ----------------------------------------------------------------------
 
 // Estrutura do usuário (Corresponde ao UsuarioDTOResponse do backend)
@@ -18,9 +17,11 @@ export interface User {
     readingGoal?: number; 
 }
 
-// Resposta da API de Login (Corresponde ao RecoveryJwtTokenDto do backend)
+// 🚨 ALTERAÇÃO CRÍTICA: AuthTokenResponse agora inclui o User
+// Assumimos que o endpoint /users/login retorna o token E o perfil
 export interface AuthTokenResponse { 
     token: string;
+    user: User; // <-- DADOS DO USUÁRIO ADICIONADOS AQUI
 }
 
 // Credenciais de Login
@@ -38,7 +39,6 @@ interface AuthContextType {
     logout: () => Promise<void>;
     updateUser: (newData: Partial<User>) => void; 
     requestEmailChange: (newEmail: string) => Promise<void>; 
-    // 🚨 REINTRODUÇÃO: Função de teste de conexão
     testConnection: () => Promise<void>; 
 }
 
@@ -49,21 +49,19 @@ interface AuthProviderProps {
 // Componente de Carregamento
 const LoadingScreen = () => (
     <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#387C6F" />
+        <ActivityIndicator size="large" color="#059669" />
         <Text style={styles.loadingText}>Carregando dados de autenticação...</Text>
     </View>
 );
 
 // ----------------------------------------------------------------------
-// 2. Constantes e Rotas
+// 2. Constantes e Rotas (SIMPLIFICADO)
 // ----------------------------------------------------------------------
 
 const TOKEN_KEY = 'authToken';
 
-// Rotas alinhadas com o Controller do Spring Boot (/users/...)
-const AUTH_BASE_PATH = '/users'; // Base
+// 🚨 REMOVIDO: USER_PROFILE_PATH não é mais necessário
 const AUTH_LOGIN_PATH = '/users/login'; // Rota de Login POST
-const USER_PROFILE_PATH = '/users/me'; // Rota de Perfil GET 
 
 // Criação do Contexto
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -80,16 +78,15 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
     // Função de Logout (REAL)
     const internalSignOut = async (): Promise<void> => {
         await AsyncStorage.removeItem(TOKEN_KEY);
-        // Remove o token do Axios.defaults.headers.common
         delete api.defaults.headers.common['Authorization']; 
     };
     
-    // Função para buscar dados do perfil (REAL)
-    const getProfileData = async (): Promise<User> => {
-        // Usa a instância 'api' que deve ter o token no cabeçalho
+    // 🚨 REMOVIDO: getProfileData não é mais usado
+    /* const getProfileData = async (): Promise<User> => {
         const response: AxiosResponse<User> = await api.get(USER_PROFILE_PATH);
         return response.data;
-    }
+    } 
+    */
 
     // --------------------------------------------------------------------
     // FUNÇÃO DE TESTE DE REDE CRU (fetch)
@@ -102,7 +99,6 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
             const response = await fetch(testURL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Envia dados, mas espera falhar com 400/401 se a conexão for OK
                 body: JSON.stringify({ email: "test@test.com", password: "123" }), 
             });
 
@@ -110,12 +106,10 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
                 console.log(`✅ Conexão bem-sucedida! Status: ${response.status}. O servidor respondeu OK (Inesperado para login).`);
             } else {
                 console.log(`⚠️ Conexão alcançada, mas falhou no servidor (Status ${response.status}). Ex: 400, 401, 404.`);
-                // Tenta ler o corpo do erro
                 const errorData = await response.text().catch(() => "Corpo de erro indisponível.");
-                console.log("   Detalhes da Resposta (Spring Boot recebeu requisição):", errorData.substring(0, 100) + '...');
+                console.log("   Detalhes da Resposta (Spring Boot recebeu requisição):", errorData.substring(0, 100) + '...');
             }
         } catch (error) {
-            // ❌ ESTE É O ERRO QUE CONFIRMA PROBLEMA DE REDE
             console.error("❌ ERRO CRU DE REDE (FETCH): O emulador não conseguiu acessar o IP/Porta da sua máquina. Verifique o Firewall ou o IP em api.tsx.", error);
         }
         console.log("--- FIM DO TESTE DE CONEXÃO PURA ---");
@@ -129,20 +123,21 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
         const loadInitialData = async () => {
             try {
                 const token = await AsyncStorage.getItem(TOKEN_KEY);
-
+                // 🚨 IMPORTANTE: Se não há rota de perfil, não conseguimos buscar os dados
+                // Se o token existe, assumimos que o usuário está logado, mas o 'user' será nulo
+                // até o próximo login ou se os dados básicos forem salvos separadamente.
                 if (token) {
-                    // Garante que o Axios use o token para a chamada getProfileData
                     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-                    const profileData = await getProfileData();
-                    setUser(profileData);
                     setIsLoggedIn(true);
+                    // 💡 OPÇÃO: Para ter o nome, você teria que armazenar o objeto User no AsyncStorage no momento do login.
+                    // Caso contrário, 'user' será null aqui.
+                    console.warn("Sessão persistente carregada. Sem o /users/me, o objeto 'user' será nulo até o login.");
                 }
             } catch (error) {
-                console.error("Erro ao carregar sessão (Token inválido/expirado):", error);
+                console.error("Erro ao carregar sessão:", error);
                 await internalSignOut(); 
             } finally {
                 setIsLoading(false);
-                // 🚨 ADIÇÃO TEMPORÁRIA: Roda o teste de conexão pura no carregamento
                 await testConnection(); 
             }
         };
@@ -152,27 +147,28 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
 
 
     // --------------------------------------------------------------------
-    // Função de Login (Duas Etapas)
+    // Função de Login (AGORA É DE UMA ETAPA)
     // --------------------------------------------------------------------
     const login = async (email: string, password: string): Promise<void> => {
         setIsLoading(true);
         try {
             const credentials: LoginCredentials = { email, password };
             
-            // 1. CHAMADA 1: PEGAR SOMENTE O TOKEN
-            // 🚨 CORREÇÃO 2: Usa publicApi para o Login (Não envia tokens antigos/nulos)
+            // 1. CHAMADA ÚNICA: PEGAR TOKEN E DADOS DO USUÁRIO
             const responseToken: AxiosResponse<AuthTokenResponse> = await publicApi.post(AUTH_LOGIN_PATH, credentials);
             
-            const { token } = responseToken.data;
-            await AsyncStorage.setItem(TOKEN_KEY, token); 
+            // 🚨 AJUSTE: Desestruturando o token E o user
+            const { token, user: userData } = responseToken.data;
             
-            // Atualiza o header para a próxima chamada (usa 'api')
+            await AsyncStorage.setItem(TOKEN_KEY, token); 
+            // 💡 OPÇÃO: Salvar os dados do usuário para persistência
+            // await AsyncStorage.setItem('userData', JSON.stringify(userData)); 
+            
+            // Atualiza o header para chamadas futuras
             api.defaults.headers.common['Authorization'] = `Bearer ${token}`; 
 
-            // 2. CHAMADA 2: PEGAR OS DADOS DO USUÁRIO
-            const userData = await getProfileData(); 
-
-            setUser(userData);
+            // Define os dados no estado
+            setUser(userData); 
             setIsLoggedIn(true);
             Alert.alert("Sucesso", `Bem-vindo(a), ${userData.name}!`);
 
@@ -207,18 +203,27 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
         }
     };
 
+    // 🚨 ALTERAÇÃO: A função updateUser agora usa um caminho /users/update (exemplo)
+    // Se o backend usar um PATCH na rota base /users (ou outra), ajuste conforme o backend.
     const updateUser = async (newData: Partial<User>) => {
         if (!user) return; 
         setIsLoading(true);
+        
+        // 🚨 Assumindo que você pode usar o PATCH na rota /users/
+        const UPDATE_PATH = `/users/${user.id}`; 
+        // OU, se o backend usa uma rota mais simples (que identifica pelo token):
+        // const UPDATE_PATH = `/users`; // Se for assim, o endpoint /users (PATCH) deve ser criado no backend.
 
         try {
-            await api.patch(USER_PROFILE_PATH, newData); 
+            // Se o backend não tem a rota /users/me (GET), é provável que ele também não tenha um PATCH no mesmo estilo.
+            // Para simplificar, vou manter a chamada no caminho /users/
+            await api.patch(`/users`, newData); // 💡 CHUTE: O backend usa PATCH /users e identifica o usuário pelo token
             
             setUser(prevUser => ({ ...prevUser!, ...newData, }));
             Alert.alert("Perfil Atualizado", "Suas informações foram salvas.");
 
         } catch (error: any) {
-             const errorMessage = error.response?.data?.message || "Erro ao salvar as informações do perfil.";
+             const errorMessage = error.response?.data?.message || "Erro ao salvar as informações do perfil. Verifique se o endpoint /users (PATCH) existe.";
              Alert.alert("Erro de Atualização", errorMessage);
         } finally {
             setIsLoading(false);
@@ -235,7 +240,6 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
     };
 
 
-    // Adicionando a função de teste ao contexto
     const authContextValue: AuthContextType = {
         user, isLoggedIn, isLoading, login, logout, updateUser, requestEmailChange, testConnection 
     };

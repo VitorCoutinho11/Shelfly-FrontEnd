@@ -4,7 +4,7 @@ import { LivroResponse } from '../interfaces/livro/response';
 import { LivroRequest } from '../interfaces/livro/request'; 
 
 // Caminho base definido no @RequestMapping("api/livro") do Controller
-const BASE_PATH = 'http://academico3.rj.senac.br/shelfly/api'; 
+const BASE_PATH = 'http://academico3.rj.senac.br/shelfly/api/livro'; 
 
 // ----------------------------------------------------------------------------------------------
 // --- Serviços de Livro (CRUD) com Axios ---
